@@ -1,0 +1,31 @@
+# Gradle build files
+.gradle/
+build/
+app/build/
+
+# Local developer settings
+local.properties
+
+# Android Studio / IntelliJ / Eclipse / VS Code project files
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+.project
+.classpath
+.settings/
+
+# macOS system files
+.DS_Store
+
+# Compiled/Signed binaries
+*.apk
+*.apk.idsig
+
+# Keystore files (Credentials should not be tracked)
+*.keystore
+*.jks
+
+# Temporary scripts
+generate_icon.py

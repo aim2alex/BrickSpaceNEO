@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bg_top">#55D0FF</color>
+    <color name="bg_bottom">#BDE458</color>
+    <color name="panel_orange">#F6A343</color>
+    <color name="panel_yellow">#FFE37A</color>
+    <color name="panel_border">#D96E16</color>
+</resources>
