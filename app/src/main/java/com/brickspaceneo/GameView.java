@@ -5,6 +5,7 @@ import com.brickspaceneo.modes.tetra.TetraEngine;
 import com.brickspaceneo.modes.snake.SnakeEngine;
 import com.brickspaceneo.modes.columns.ColumnsEngine;
 import com.brickspaceneo.modes.collapse.CollapseEngine;
+import com.brickspaceneo.modes.breaker.BreakerEngine;
 
 import android.content.Context;
 import android.graphics.Canvas;
@@ -95,6 +96,7 @@ public class GameView extends View {
 
     private final RectF bricksTileRect = new RectF();
     private final RectF snakeTileRect = new RectF();
+    private final RectF breakerTileRect = new RectF();
     private final RectF gameSelectionBackBtnRect = new RectF();
     
     // Snake specific UI
@@ -119,6 +121,7 @@ public class GameView extends View {
     private int bestScoreSnake = 0;
     private int bestScoreColumns = 0;
     private int bestScoreCollapse = 0;
+    private int bestScoreBreaker = 0;
     private int prevLines;
     private float columnsComboAnim = 0f;
     private float collapseComboAnim = 0f;
@@ -127,13 +130,17 @@ public class GameView extends View {
     private boolean inGameSelection = false;
     private boolean inOptions = false;
     
-    public enum GameMode { BRICKS, SNAKE, COLUMNS, COLLAPSE }
+    public enum GameMode { BRICKS, SNAKE, COLUMNS, COLLAPSE, BREAKER }
     private GameMode currentGameMode = GameMode.BRICKS;
-
+ 
     private final TetraEngine engine = new TetraEngine();
     private final SnakeEngine snakeEngine = new SnakeEngine();
     private final ColumnsEngine columnsEngine = new ColumnsEngine();
     private final CollapseEngine collapseEngine = new CollapseEngine();
+    private final BreakerEngine breakerEngine = new BreakerEngine();
+    
+    private boolean isLeftButtonPressed = false;
+    private boolean isRightButtonPressed = false;
     
     // Selection rects
     private final RectF columnsTileRect = new RectF();
@@ -170,6 +177,7 @@ public class GameView extends View {
         bestScoreSnake = prefs.getInt("BEST_SCORE_SNAKE", 0);
         bestScoreColumns = prefs.getInt("BEST_SCORE_COLUMNS", 0);
         bestScoreCollapse = prefs.getInt("BEST_SCORE_COLLAPSE", 0);
+        bestScoreBreaker = prefs.getInt("BEST_SCORE_BREAKER", 0);
 
         gridPaint.setStyle(Paint.Style.STROKE);
         gridPaint.setColor(applyTheme(0x18FFFFFF));
@@ -408,7 +416,7 @@ public class GameView extends View {
                 drawColumnsBoard(canvas, now * 0.000000001f);
                 canvas.restore();
                 drawColumnsOverlay(canvas);
-            } else {
+            } else if (currentGameMode == GameMode.COLLAPSE) {
                 drawCollapseHud(canvas);
                 canvas.save();
                 float shakeX = (float) Math.sin(now * 0.0000000105f) * boardShake * dp(6);
@@ -417,6 +425,15 @@ public class GameView extends View {
                 drawCollapseBoard(canvas, now * 0.000000001f);
                 canvas.restore();
                 drawCollapseOverlay(canvas);
+            } else {
+                drawBreakerHud(canvas);
+                canvas.save();
+                float shakeX = (float) Math.sin(now * 0.0000000105f) * boardShake * dp(6);
+                float shakeY = (float) Math.cos(now * 0.000000009f) * boardShake * dp(4);
+                canvas.translate(shakeX, shakeY);
+                drawBreakerBoard(canvas, now * 0.000000001f);
+                canvas.restore();
+                drawBreakerOverlay(canvas);
             }
         }
         postInvalidateOnAnimation();
@@ -550,8 +567,10 @@ public class GameView extends View {
             // Animate combo display (0 = center score, 1 = shifted score + combo label)
             float targetAnim = columnsEngine.getCombo() > 1 ? 1f : 0f;
             columnsComboAnim += (targetAnim - columnsComboAnim) * Math.min(1f, delta * 8f);
-        } else {
+        } else if (currentGameMode == GameMode.COLLAPSE) {
             updateCollapseSimulation(delta);
+        } else {
+            updateBreakerSimulation(delta);
         }
 
         boardShake = Math.max(0f, boardShake - delta * 2.0f);
@@ -753,16 +772,18 @@ public class GameView extends View {
         resetScoresBtnRect.set(resetBtnLeft, resetBtnBottom - resetBtnHeight, resetBtnLeft + resetBtnWidth, resetBtnBottom);
 
         // Game Selection Layout
-        float tileWidth = (usableWidth - dp(20)) / 2f;
-        float tileHeight = dp(140);
-        float tileTop = height * 0.28f;
+        float tileWidth = (usableWidth - dp(16)) / 2f;
+        float tileHeight = dp(110);
+        float tileTop = height * 0.24f;
         bricksTileRect.set(usableLeft, tileTop, usableLeft + tileWidth, tileTop + tileHeight);
-        snakeTileRect.set(bricksTileRect.right + dp(20), tileTop, bricksTileRect.right + dp(20) + tileWidth, tileTop + tileHeight);
+        snakeTileRect.set(bricksTileRect.right + dp(16), tileTop, bricksTileRect.right + dp(16) + tileWidth, tileTop + tileHeight);
         
-        columnsTileRect.set(usableLeft, snakeTileRect.bottom + dp(16), usableLeft + tileWidth, snakeTileRect.bottom + dp(16) + tileHeight);
-        collapseTileRect.set(columnsTileRect.right + dp(20), snakeTileRect.bottom + dp(16), columnsTileRect.right + dp(20) + tileWidth, snakeTileRect.bottom + dp(16) + tileHeight);
+        columnsTileRect.set(usableLeft, snakeTileRect.bottom + dp(12), usableLeft + tileWidth, snakeTileRect.bottom + dp(12) + tileHeight);
+        collapseTileRect.set(columnsTileRect.right + dp(16), snakeTileRect.bottom + dp(12), columnsTileRect.right + dp(16) + tileWidth, snakeTileRect.bottom + dp(12) + tileHeight);
         
-        gameSelectionBackBtnRect.set(mmBtnLeft, columnsTileRect.bottom + dp(30), mmBtnLeft + mmBtnWidth, columnsTileRect.bottom + dp(30) + mmBtnHeight);
+        breakerTileRect.set(usableLeft, columnsTileRect.bottom + dp(12), usableRight, columnsTileRect.bottom + dp(12) + tileHeight);
+        
+        gameSelectionBackBtnRect.set(mmBtnLeft, breakerTileRect.bottom + dp(22), mmBtnLeft + mmBtnWidth, breakerTileRect.bottom + dp(22) + mmBtnHeight);
 
         // Snake Specific Layout (Matching Screenshot)
         snakeLivesPanelRect.set(usableLeft, infoTop, usableLeft + usableWidth * 0.32f, infoTop + nextPanelHeight);
@@ -1574,18 +1595,28 @@ public class GameView extends View {
                 handleSnakeTouch(x, y);
             } else if (currentGameMode == GameMode.COLUMNS) {
                 handleColumnsTouch(x, y);
-            } else {
+            } else if (currentGameMode == GameMode.COLLAPSE) {
                 handleCollapseTouch(x, y);
+            } else if (currentGameMode == GameMode.BREAKER) {
+                handleBreakerTouch(x, y, MotionEvent.ACTION_DOWN);
             }
-        } else if (event.getAction() == MotionEvent.ACTION_MOVE && useGestures && !inMainMenu && !inGameSelection) {
-            if (currentGameMode == GameMode.BRICKS) handleBricksGestureMove(x, y);
-            else if (currentGameMode == GameMode.COLUMNS) handleColumnsGestureMove(x, y);
-            else if (currentGameMode == GameMode.COLLAPSE) handleCollapseGestureMove(x, y);
-        } else if (event.getAction() == MotionEvent.ACTION_UP && useGestures && !inMainMenu && !inGameSelection) {
-            if (currentGameMode == GameMode.BRICKS) handleBricksGestureUp(x, y);
-            else if (currentGameMode == GameMode.SNAKE) handleSnakeGestureUp(x, y);
-            else if (currentGameMode == GameMode.COLUMNS) handleColumnsGestureUp(x, y);
-            else handleCollapseGestureUp(x, y);
+        } else if (event.getAction() == MotionEvent.ACTION_MOVE) {
+            if (currentGameMode == GameMode.BREAKER && !inMainMenu && !inGameSelection) {
+                handleBreakerTouch(x, y, MotionEvent.ACTION_MOVE);
+            } else if (useGestures && !inMainMenu && !inGameSelection) {
+                if (currentGameMode == GameMode.BRICKS) handleBricksGestureMove(x, y);
+                else if (currentGameMode == GameMode.COLUMNS) handleColumnsGestureMove(x, y);
+                else if (currentGameMode == GameMode.COLLAPSE) handleCollapseGestureMove(x, y);
+            }
+        } else if (event.getAction() == MotionEvent.ACTION_UP || event.getAction() == MotionEvent.ACTION_CANCEL) {
+            if (currentGameMode == GameMode.BREAKER && !inMainMenu && !inGameSelection) {
+                handleBreakerTouch(x, y, event.getAction());
+            } else if (useGestures && !inMainMenu && !inGameSelection) {
+                if (currentGameMode == GameMode.BRICKS) handleBricksGestureUp(x, y);
+                else if (currentGameMode == GameMode.SNAKE) handleSnakeGestureUp(x, y);
+                else if (currentGameMode == GameMode.COLUMNS) handleColumnsGestureUp(x, y);
+                else if (currentGameMode == GameMode.COLLAPSE) handleCollapseGestureUp(x, y);
+            }
         }
         return true;
     }
@@ -1615,12 +1646,14 @@ public class GameView extends View {
                 bestScoreSnake = 0;
                 bestScoreColumns = 0;
                 bestScoreCollapse = 0;
+                bestScoreBreaker = 0;
                 getContext().getSharedPreferences("BrickSpaceNeoPrefs", Context.MODE_PRIVATE)
                         .edit()
                         .putInt("BEST_SCORE", 0)
                         .putInt("BEST_SCORE_SNAKE", 0)
                         .putInt("BEST_SCORE_COLUMNS", 0)
                         .putInt("BEST_SCORE_COLLAPSE", 0)
+                        .putInt("BEST_SCORE_BREAKER", 0)
                         .apply();
                 playSound(soundGameOver);
             } else if (contains(optionsBackBtnActualRect, x, y)) {
@@ -1660,6 +1693,10 @@ public class GameView extends View {
             currentGameMode = GameMode.COLLAPSE;
             startGame();
             playSound(soundRotate);
+        } else if (contains(breakerTileRect, x, y)) {
+            currentGameMode = GameMode.BREAKER;
+            startGame();
+            playSound(soundRotate);
         } else if (contains(gameSelectionBackBtnRect, x, y)) {
             inGameSelection = false;
             inMainMenu = true;
@@ -1680,8 +1717,10 @@ public class GameView extends View {
             snakeEngine.resetGame();
         } else if (currentGameMode == GameMode.COLUMNS) {
             columnsEngine.resetGame();
-        } else {
+        } else if (currentGameMode == GameMode.COLLAPSE) {
             collapseEngine.restart();
+        } else {
+            breakerEngine.restart();
         }
         restartMusic();
     }
@@ -2018,6 +2057,8 @@ public class GameView extends View {
         drawGameTile(canvas, columnsTileRect, "COLUMNS", 2, currentGameMode == GameMode.COLUMNS);
         // Collapse Tile
         drawGameTile(canvas, collapseTileRect, "COLLAPSE", 3, currentGameMode == GameMode.COLLAPSE);
+        // Breaker Tile
+        drawGameTile(canvas, breakerTileRect, "BREAKER", 4, currentGameMode == GameMode.BREAKER);
 
         drawButton(canvas, gameSelectionBackBtnRect, "BACK", 0xCC4A2834, 0x66FF9A84);
     }
@@ -2057,11 +2098,24 @@ public class GameView extends View {
                 glowPaint.setColor(applyTheme(PIECE_COLORS[i % PIECE_COLORS.length]));
                 canvas.drawCircle(cx + cs/2, iconY, cs/2.2f, glowPaint);
             }
-        } else { // Collapse Icon
+        } else if (type == 3) { // Collapse Icon
             float bs = iconSize * 0.35f;
             drawJellyCellAt(canvas, new RectF(iconX - bs * 1.2f, iconY + bs * 0.4f, iconX - bs * 0.2f, iconY + bs * 1.4f), 1, 0, 0, true, false, false);
             drawJellyCellAt(canvas, new RectF(iconX - bs * 0.5f, iconY - bs * 0.5f, iconX + bs * 0.5f, iconY + bs * 0.5f), 2, 0, 0, true, false, false);
             drawJellyCellAt(canvas, new RectF(iconX + bs * 0.2f, iconY - bs * 1.4f, iconX + bs * 1.2f, iconY - bs * 0.4f), 3, 0, 0, true, false, false);
+        } else { // Breaker Icon
+            // Draw a tiny paddle at the bottom
+            float pw = iconSize * 1.1f;
+            float ph = iconSize * 0.22f;
+            RectF padR = new RectF(iconX - pw/2, iconY + iconSize/4 - ph/2, iconX + pw/2, iconY + iconSize/4 + ph/2);
+            blockPaint.setColor(applyTheme(0xFF4ECFFF));
+            canvas.drawRoundRect(padR, dp(3), dp(3), blockPaint);
+            
+            // Draw a tiny ball bouncing upwards
+            float bx = iconX;
+            float by = iconY - iconSize/4;
+            glowPaint.setColor(applyTheme(0xFFFFD35A));
+            canvas.drawCircle(bx, by, dp(5), glowPaint);
         }
 
         buttonPaint.setTextSize(dp(22));
@@ -2935,6 +2989,590 @@ public class GameView extends View {
 
             drawButton(canvas, gameOverRestartBtnRect, "RESTART", 0xCC4A2834, 0x66FF9A84);
             drawButton(canvas, gameOverMenuBtnRect, "MAIN MENU", 0xCC2A2052, 0x66F47BF5);
+        }
+    }
+
+    private void drawBreakerHud(Canvas canvas) {
+        drawGlassCard(canvas, pauseButton, 0xCC143456, 0x6636D6FF);
+        drawGlassCard(canvas, bestScoreRect, 0xCC143456, 0x6636D6FF);
+        drawGlassCard(canvas, mainScoreRect, 0xCC143456, 0x6636D6FF);
+        drawGlassCard(canvas, nextRect, 0xC81C3045, 0x66FFE77B);
+        drawGlassCard(canvas, progressRect, 0xC81A2940, 0x66FFFFFF);
+
+        // Pause Button symbol
+        float cx = pauseButton.centerX();
+        float cy = pauseButton.centerY();
+        float pw = dp(4);
+        float ph = dp(16);
+        float pgap = dp(3);
+        buttonPaint.setStyle(Paint.Style.FILL);
+        canvas.drawRoundRect(cx - pgap - pw, cy - ph/2f, cx - pgap, cy + ph/2f, dp(1), dp(1), buttonPaint);
+        canvas.drawRoundRect(cx + pgap, cy - ph/2f, cx + pgap + pw, cy + ph/2f, dp(1), dp(1), buttonPaint);
+
+        buttonPaint.setTextSize(dp(20));
+        canvas.drawText("🏆", bestScoreRect.left + dp(22), bestScoreRect.centerY() - (buttonPaint.descent() + buttonPaint.ascent()) / 2, buttonPaint);
+        
+        hudLabelPaint.setTextAlign(Paint.Align.LEFT);
+        hudValuePaint.setTextAlign(Paint.Align.LEFT);
+        
+        hudLabelPaint.setTextSize(dp(11));
+        canvas.drawText("BEST", bestScoreRect.left + dp(44), bestScoreRect.top + dp(20), hudLabelPaint);
+        drawAutoScaledText(canvas, String.valueOf(bestScoreBreaker), bestScoreRect.left + dp(44), bestScoreRect.centerY() + dp(12), bestScoreRect.width() - dp(52), hudValuePaint, dp(18));
+        
+        hudLabelPaint.setTextAlign(Paint.Align.CENTER);
+        hudValuePaint.setTextAlign(Paint.Align.CENTER);
+        
+        // Score display
+        float scoreLabelY = mainScoreRect.top + dp(30);
+        float scoreValueY = mainScoreRect.top + dp(60);
+
+        canvas.drawText("SCORE", mainScoreRect.centerX(), scoreLabelY, hudLabelPaint);
+        hudValuePaint.setTextSize(dp(36));
+        drawAutoScaledText(canvas, String.valueOf(breakerEngine.getScore()), mainScoreRect.centerX(), scoreValueY, mainScoreRect.width() - dp(20), hudValuePaint, dp(36));
+
+        // Combo display
+        if (breakerEngine.getComboDisplayTimer() > 0.05f) {
+            hudLabelPaint.setColor(applyTheme(0xFFFFD35A)); // Gold
+            hudLabelPaint.setAlpha((int) (breakerEngine.getComboDisplayTimer() / 1.6f * 255));
+            hudLabelPaint.setTextSize(dp(12));
+            canvas.drawText("COMBO x" + breakerEngine.getComboCount(), mainScoreRect.centerX(), mainScoreRect.bottom - dp(12), hudLabelPaint);
+            hudLabelPaint.setAlpha(255);
+            hudLabelPaint.setColor(Color.WHITE);
+        }
+
+        // Draw lives preview in nextRect
+        hudLabelPaint.setTextSize(dp(11));
+        canvas.drawText("LIVES", nextRect.centerX(), nextRect.top + dp(20), hudLabelPaint);
+        
+        int lives = breakerEngine.getLives();
+        float lifeRadius = dp(8);
+        float spacing = dp(22);
+        float startX = nextRect.centerX() - spacing;
+        float centerY = nextRect.centerY() + dp(8);
+        for (int i = 0; i < 3; i++) {
+            float lx = startX + i * spacing;
+            if (i < lives) {
+                hudLabelPaint.setColor(applyTheme(0xFFFF4E7E));
+                hudLabelPaint.setStyle(Paint.Style.FILL);
+                canvas.drawCircle(lx, centerY, lifeRadius, hudLabelPaint);
+                hudLabelPaint.setColor(Color.WHITE);
+                canvas.drawCircle(lx - lifeRadius*0.3f, centerY - lifeRadius*0.3f, lifeRadius*0.25f, hudLabelPaint);
+            } else {
+                hudLabelPaint.setColor(applyTheme(0x44FFFFFF));
+                hudLabelPaint.setStyle(Paint.Style.STROKE);
+                hudLabelPaint.setStrokeWidth(dp(1.5f));
+                canvas.drawCircle(lx, centerY, lifeRadius, hudLabelPaint);
+            }
+        }
+        hudLabelPaint.setStyle(Paint.Style.FILL); // Restore
+        hudLabelPaint.setColor(Color.WHITE);
+
+        // Draw pressure/falling rows countdown bar
+        hudLabelPaint.setTextSize(dp(11));
+        canvas.drawText("PRESSURE", progressRect.centerX(), progressRect.top + dp(20), hudLabelPaint);
+
+        float barHeight = dp(10);
+        float barWidth = progressRect.width() - dp(24);
+        RectF bar = new RectF(progressRect.centerX() - barWidth/2f, progressRect.centerY() - barHeight/2f + dp(2),
+                              progressRect.centerX() + barWidth/2f, progressRect.centerY() + barHeight/2f + dp(2));
+        
+        float progress = breakerEngine.getFallingRowProgress();
+        RectF fill = new RectF(bar.left, bar.top, bar.left + bar.width() * progress, bar.bottom);
+
+        if (themeMode == 4) {
+            blockStrokePaint.setColor(0xFF000000);
+            blockStrokePaint.setStrokeWidth(dp(1.5f));
+            blockStrokePaint.setStyle(Paint.Style.STROKE);
+            canvas.drawRoundRect(bar, barHeight/2, barHeight/2, blockStrokePaint);
+            
+            if (progress > 0.02f) {
+                blockPaint.setColor(0xFF000000);
+                blockPaint.setStyle(Paint.Style.FILL);
+                canvas.drawRoundRect(fill, barHeight/2, barHeight/2, blockPaint);
+            }
+        } else {
+            overlayPaint.setColor(0x33000000); 
+            overlayPaint.setStyle(Paint.Style.FILL);
+            canvas.drawRoundRect(bar, barHeight/2, barHeight/2, overlayPaint);
+            
+            overlayPaint.setColor(0x55FFFFFF); 
+            overlayPaint.setStyle(Paint.Style.STROKE);
+            overlayPaint.setStrokeWidth(dp(1f));
+            canvas.drawRoundRect(bar, barHeight/2, barHeight/2, overlayPaint);
+            overlayPaint.setStyle(Paint.Style.FILL); // restore
+
+            if (progress > 0.01f) {
+                glowPaint.setStyle(Paint.Style.FILL);
+                glowPaint.setAlpha(255);
+                glowPaint.setShader(new LinearGradient(fill.left, fill.top, fill.right, fill.top,
+                                                     0xFF4ECFFF, 0xFFF47BF5, Shader.TileMode.CLAMP));
+                canvas.drawRoundRect(fill, barHeight/2, barHeight/2, glowPaint);
+                glowPaint.setShader(null);
+            }
+        }
+        
+        helperPaint.setTextSize(dp(11));
+        String text = "LEVEL " + breakerEngine.getLevel() + " • SPEED x" + String.format("%.2f", breakerEngine.getBallSpeedMultiplier()) + " • ROWS " + String.format("%.1fs", breakerEngine.getFallingRowInterval() * (1f - progress));
+        canvas.drawText(text, progressRect.centerX(), progressRect.bottom - dp(16), helperPaint);
+    }
+
+    private void drawBreakerBoard(Canvas canvas, float time) {
+        // Radial background glow
+        glowPaint.setShader(new RadialGradient(
+                boardRect.centerX(), boardRect.top + boardRect.height() * 0.28f, boardRect.width() * 0.7f,
+                0x3047C5FF, 0x00000000, Shader.TileMode.CLAMP
+        ));
+        canvas.drawRoundRect(boardGlowRect, dp(28), dp(28), glowPaint);
+        glowPaint.setShader(null);
+
+        if (themeMode != 4) {
+            boardPaint.setShader(new LinearGradient(
+                    boardRect.left, boardRect.top, boardRect.left, boardRect.bottom,
+                    applyTheme(0xE8182940), applyTheme(0xF00A1526), Shader.TileMode.CLAMP
+            ));
+            canvas.drawRoundRect(boardRect, dp(26), dp(26), boardPaint);
+            boardPaint.setShader(null);
+        } else {
+            RectF outerBoard = new RectF(boardRect);
+            outerBoard.inset(-dp(5), -dp(5));
+            blockStrokePaint.setColor(0xFF000000);
+            blockStrokePaint.setStrokeWidth(dp(2.5f));
+            canvas.drawRoundRect(outerBoard, dp(30), dp(30), blockStrokePaint);
+            blockStrokePaint.setStrokeWidth(dp(1.3f));
+        }
+
+        float cell = boardRect.width() / BreakerEngine.COLS;
+        float rowHeight = boardRect.height() / BreakerEngine.ROWS;
+
+        // Draw light neon grid cells
+        gridPaint.setColor(applyTheme(0x12FFFFFF));
+        for (int row = 0; row < BreakerEngine.ROWS; row++) {
+            for (int col = 0; col < BreakerEngine.COLS; col++) {
+                RectF rect = cellRect(col, row, cell, rowHeight);
+                canvas.drawRoundRect(rect, dp(10), dp(10), gridPaint);
+            }
+        }
+
+        // Draw pulsing Danger Zone background overlay
+        float pulse = (float) Math.sin(time * 6.0f) * 0.5f + 0.5f;
+        int dangerColor = withAlpha(applyTheme(0xFFFF3B30), (int) (20 + 25 * pulse));
+        overlayPaint.setColor(dangerColor);
+        overlayPaint.setStyle(Paint.Style.FILL);
+        RectF dangerZoneRect = new RectF(boardRect.left, boardRect.top + BreakerEngine.DANGER_ZONE_START_ROW * rowHeight, boardRect.right, boardRect.bottom);
+        canvas.drawRoundRect(dangerZoneRect, dp(12), dp(12), overlayPaint);
+
+        // Danger Zone line
+        overlayPaint.setColor(applyTheme(0xFFFF3B30));
+        overlayPaint.setStyle(Paint.Style.STROKE);
+        overlayPaint.setStrokeWidth(dp(2.0f));
+        canvas.drawLine(boardRect.left, boardRect.top + BreakerEngine.DANGER_ZONE_START_ROW * rowHeight, boardRect.right, boardRect.top + BreakerEngine.DANGER_ZONE_START_ROW * rowHeight, overlayPaint);
+        overlayPaint.setStyle(Paint.Style.FILL); // restore
+
+        // Danger Zone text
+        helperPaint.setColor(applyTheme(0xFFFF3B30));
+        helperPaint.setAlpha((int) (40 + 30 * pulse));
+        helperPaint.setTextSize(dp(10));
+        helperPaint.setTextAlign(Paint.Align.CENTER);
+        canvas.drawText("⚠️ DANGER ZONE ⚠️", boardRect.centerX(), boardRect.top + 18.7f * rowHeight, helperPaint);
+        helperPaint.setColor(Color.WHITE);
+        helperPaint.setAlpha(255);
+
+        // Draw blocks/bricks
+        for (int row = 0; row < BreakerEngine.ROWS; row++) {
+            for (int col = 0; col < BreakerEngine.COLS; col++) {
+                int value = breakerEngine.getCell(row, col);
+                if (value == 0) continue;
+
+                if (value >= 1 && value <= 7) { // Standard Brick
+                    if (themeMode == 4) {
+                        RectF cellR = cellRect(col, row, cell, rowHeight);
+                        blockStrokePaint.setColor(0xFF000000);
+                        blockStrokePaint.setStrokeWidth(dp(1.8f));
+                        canvas.drawRoundRect(cellR, dp(6), dp(6), blockStrokePaint);
+                        RectF inner = new RectF(cellR.left + dp(3.5f), cellR.top + dp(3.5f), cellR.right - dp(3.5f), cellR.bottom - dp(3.5f));
+                        blockPaint.setColor(0xFF000000);
+                        blockPaint.setStyle(Paint.Style.FILL);
+                        canvas.drawRoundRect(inner, dp(2), dp(2), blockPaint);
+                    } else {
+                        drawJellyCell(canvas, col, row, value - 1, cell, rowHeight,
+                                0.05f * (float) Math.sin(time * 2.2f + row * 0.4f + col * 0.7f),
+                                0.08f * (float) Math.cos(time * 2.8f + col * 0.3f), false, false);
+                    }
+                } else if (value == 8) { // Durable Brick
+                    int hp = breakerEngine.getBrickHP(row, col);
+                    RectF cellR = cellRect(col, row, cell, rowHeight);
+                    if (themeMode == 4) {
+                        blockStrokePaint.setColor(0xFF000000);
+                        blockStrokePaint.setStrokeWidth(dp(1.8f));
+                        canvas.drawRoundRect(cellR, dp(6), dp(6), blockStrokePaint);
+                        RectF inner = new RectF(cellR.left + dp(3.5f), cellR.top + dp(3.5f), cellR.right - dp(3.5f), cellR.bottom - dp(3.5f));
+                        blockPaint.setColor(0xFF000000);
+                        blockPaint.setStyle(Paint.Style.FILL);
+                        canvas.drawRoundRect(inner, dp(2), dp(2), blockPaint);
+                        if (hp <= 2) {
+                            canvas.drawLine(cellR.left + dp(3), cellR.top + dp(3), cellR.right - dp(3), cellR.bottom - dp(3), blockStrokePaint);
+                        }
+                    } else {
+                        blockPaint.setShader(new LinearGradient(cellR.left, cellR.top, cellR.right, cellR.bottom,
+                                             0xFFBDC3C7, 0xFF2C3E50, Shader.TileMode.CLAMP));
+                        canvas.drawRoundRect(cellR, dp(6), dp(6), blockPaint);
+                        blockPaint.setShader(null);
+                        
+                        blockStrokePaint.setColor(0x88FFFFFF);
+                        blockStrokePaint.setStrokeWidth(dp(1.0f));
+                        blockStrokePaint.setStyle(Paint.Style.STROKE);
+                        canvas.drawRoundRect(cellR, dp(6), dp(6), blockStrokePaint);
+                        blockStrokePaint.setStyle(Paint.Style.FILL);
+                        
+                        if (hp <= 2) {
+                            blockStrokePaint.setColor(0xCC000000);
+                            blockStrokePaint.setStrokeWidth(dp(1.5f));
+                            blockStrokePaint.setStyle(Paint.Style.STROKE);
+                            canvas.drawLine(cellR.left + cellR.width()*0.2f, cellR.top + cellR.height()*0.3f, 
+                                            cellR.left + cellR.width()*0.8f, cellR.top + cellR.height()*0.7f, blockStrokePaint);
+                            if (hp == 1) {
+                                canvas.drawLine(cellR.left + cellR.width()*0.7f, cellR.top + cellR.height()*0.2f, 
+                                                cellR.left + cellR.width()*0.3f, cellR.top + cellR.height()*0.8f, blockStrokePaint);
+                            }
+                            blockStrokePaint.setStyle(Paint.Style.FILL);
+                        }
+                    }
+                } else if (value == 9) { // PLUS Block
+                    RectF cellR = cellRect(col, row, cell, rowHeight);
+                    if (themeMode == 4) {
+                        blockStrokePaint.setColor(0xFF000000);
+                        blockStrokePaint.setStrokeWidth(dp(1.8f));
+                        canvas.drawRoundRect(cellR, dp(6), dp(6), blockStrokePaint);
+                        float cx = cellR.centerX();
+                        float cy = cellR.centerY();
+                        float sz = cellR.width() * 0.25f;
+                        canvas.drawLine(cx - sz, cy, cx + sz, cy, blockStrokePaint);
+                        canvas.drawLine(cx, cy - sz, cx, cy + sz, blockStrokePaint);
+                    } else {
+                        blockPaint.setShader(new LinearGradient(cellR.left, cellR.top, cellR.right, cellR.bottom,
+                                             0xFFFFE77B, 0xFF4ECFFF, Shader.TileMode.CLAMP));
+                        canvas.drawRoundRect(cellR, dp(8), dp(8), blockPaint);
+                        blockPaint.setShader(null);
+                        
+                        glowPaint.setStyle(Paint.Style.STROKE);
+                        glowPaint.setColor(0x884ECFFF);
+                        glowPaint.setStrokeWidth(dp(2.0f + 1.5f * pulse));
+                        canvas.drawRoundRect(cellR, dp(8), dp(8), glowPaint);
+                        glowPaint.setStyle(Paint.Style.FILL);
+                        
+                        overlayTextPaint.setColor(0xFF0A1526);
+                        overlayTextPaint.setTextSize(cellR.height() * 0.8f);
+                        overlayTextPaint.setTextAlign(Paint.Align.CENTER);
+                        canvas.drawText("+", cellR.centerX(), cellR.centerY() - (overlayTextPaint.descent() + overlayTextPaint.ascent()) / 2, overlayTextPaint);
+                        overlayTextPaint.setColor(Color.WHITE);
+                    }
+                } else if (value == 10) { // MINUS Block
+                    RectF cellR = cellRect(col, row, cell, rowHeight);
+                    if (themeMode == 4) {
+                        blockStrokePaint.setColor(0xFF000000);
+                        blockStrokePaint.setStrokeWidth(dp(1.8f));
+                        canvas.drawRoundRect(cellR, dp(6), dp(6), blockStrokePaint);
+                        float cx = cellR.centerX();
+                        float cy = cellR.centerY();
+                        float sz = cellR.width() * 0.25f;
+                        canvas.drawLine(cx - sz, cy, cx + sz, cy, blockStrokePaint);
+                    } else {
+                        blockPaint.setShader(new LinearGradient(cellR.left, cellR.top, cellR.right, cellR.bottom,
+                                             0xFFFF4E50, 0xFFF9D423, Shader.TileMode.CLAMP));
+                        canvas.drawRoundRect(cellR, dp(8), dp(8), blockPaint);
+                        blockPaint.setShader(null);
+                        
+                        glowPaint.setStyle(Paint.Style.STROKE);
+                        glowPaint.setColor(0x88FF4E50);
+                        glowPaint.setStrokeWidth(dp(2.0f + 1.5f * pulse));
+                        canvas.drawRoundRect(cellR, dp(8), dp(8), glowPaint);
+                        glowPaint.setStyle(Paint.Style.FILL);
+                        
+                        overlayTextPaint.setColor(0xFF0A1526);
+                        overlayTextPaint.setTextSize(cellR.height() * 0.8f);
+                        overlayTextPaint.setTextAlign(Paint.Align.CENTER);
+                        canvas.drawText("-", cellR.centerX(), cellR.centerY() - (overlayTextPaint.descent() + overlayTextPaint.ascent()) / 2, overlayTextPaint);
+                        overlayTextPaint.setColor(Color.WHITE);
+                    }
+                }
+            }
+        }
+
+        // Draw Paddle
+        float paddlePxX = boardRect.left + (breakerEngine.getPaddleX() / BreakerEngine.COLS) * boardRect.width();
+        float paddlePxY = boardRect.top + (breakerEngine.getPaddleY() / BreakerEngine.ROWS) * boardRect.height() + rowHeight * 0.25f;
+        float paddlePxW = (breakerEngine.getPaddleWidth() / BreakerEngine.COLS) * boardRect.width();
+        float paddlePxH = rowHeight * 0.45f;
+
+        RectF paddleRect = new RectF(paddlePxX - paddlePxW/2f, paddlePxY - paddlePxH/2f,
+                                     paddlePxX + paddlePxW/2f, paddlePxY + paddlePxH/2f);
+
+        if (themeMode == 4) {
+            blockStrokePaint.setColor(0xFF000000);
+            blockStrokePaint.setStrokeWidth(dp(2.5f));
+            blockStrokePaint.setStyle(Paint.Style.STROKE);
+            canvas.drawRoundRect(paddleRect, paddlePxH/2f, paddlePxH/2f, blockStrokePaint);
+            blockStrokePaint.setStyle(Paint.Style.FILL);
+            
+            blockPaint.setColor(0xFF000000);
+            RectF innerPaddle = new RectF(paddleRect);
+            innerPaddle.inset(dp(3), dp(3));
+            canvas.drawRoundRect(innerPaddle, innerPaddle.height()/2f, innerPaddle.height()/2f, blockPaint);
+        } else {
+            blockPaint.setShader(new LinearGradient(paddleRect.left, paddleRect.top, paddleRect.right, paddleRect.top,
+                                 0xFF4ECFFF, 0xFFF47BF5, Shader.TileMode.CLAMP));
+            canvas.drawRoundRect(paddleRect, paddlePxH/2f, paddlePxH/2f, blockPaint);
+            blockPaint.setShader(null);
+
+            blockStrokePaint.setColor(0xBBFFFFFF);
+            blockStrokePaint.setStrokeWidth(dp(1.2f));
+            blockStrokePaint.setStyle(Paint.Style.STROKE);
+            canvas.drawRoundRect(paddleRect, paddlePxH/2f, paddlePxH/2f, blockStrokePaint);
+            blockStrokePaint.setStyle(Paint.Style.FILL);
+        }
+
+        // Draw Balls (with trail and glow)
+        float ballRadiusInGrid = 0.22f;
+        float ballPxR = (ballRadiusInGrid / BreakerEngine.COLS) * boardRect.width();
+
+        for (BreakerEngine.Ball ball : breakerEngine.getActiveBalls()) {
+            List<float[]> trail = ball.trail;
+            for (int t = trail.size() - 1; t >= 0; t--) {
+                float[] pos = trail.get(t);
+                float tx = boardRect.left + (pos[0] / BreakerEngine.COLS) * boardRect.width();
+                float ty = boardRect.top + (pos[1] / BreakerEngine.ROWS) * boardRect.height();
+                float alphaPct = 1f - (float) (t + 1) / (trail.size() + 1);
+                
+                if (themeMode == 4) {
+                    blockStrokePaint.setColor(0xFF000000);
+                    blockStrokePaint.setStrokeWidth(dp(1.0f));
+                    blockStrokePaint.setStyle(Paint.Style.STROKE);
+                    canvas.drawCircle(tx, ty, ballPxR * (0.4f + 0.6f * alphaPct), blockStrokePaint);
+                    blockStrokePaint.setStyle(Paint.Style.FILL);
+                } else {
+                    int trailColor = Color.HSVToColor((int) (alphaPct * 120), new float[]{ball.hueOffset % 360f, 0.8f, 0.95f});
+                    blockPaint.setColor(trailColor);
+                    canvas.drawCircle(tx, ty, ballPxR * (0.5f + 0.5f * alphaPct), blockPaint);
+                }
+            }
+
+            float bx = boardRect.left + (ball.x / BreakerEngine.COLS) * boardRect.width();
+            float by = boardRect.top + (ball.y / BreakerEngine.ROWS) * boardRect.height();
+            
+            if (themeMode == 4) {
+                blockPaint.setColor(0xFF000000);
+                canvas.drawCircle(bx, by, ballPxR, blockPaint);
+            } else {
+                int ballColor = Color.HSVToColor(255, new float[]{ball.hueOffset % 360f, 0.85f, 1.0f});
+                blockPaint.setColor(ballColor);
+                canvas.drawCircle(bx, by, ballPxR, blockPaint);
+                
+                glowPaint.setColor(withAlpha(ballColor, 100));
+                canvas.drawCircle(bx, by, ballPxR * 1.5f, glowPaint);
+                
+                blockPaint.setColor(Color.WHITE);
+                canvas.drawCircle(bx - ballPxR * 0.25f, by - ballPxR * 0.25f, ballPxR * 0.35f, blockPaint);
+            }
+        }
+
+        // Draw Explosions
+        for (BreakerEngine.Explosion exp : breakerEngine.getActiveExplosions()) {
+            float ex = boardRect.left + (exp.col / BreakerEngine.COLS) * boardRect.width();
+            float ey = boardRect.top + (exp.row / BreakerEngine.ROWS) * boardRect.height();
+            
+            float progress = exp.age / exp.maxAge;
+            float radius = cell * 2.2f * (0.3f + 0.7f * progress);
+            int alpha = (int) ((1f - progress) * 220);
+            
+            if (themeMode == 4) {
+                blockStrokePaint.setColor(0xFF000000);
+                blockStrokePaint.setStrokeWidth(dp(1.5f));
+                blockStrokePaint.setStyle(Paint.Style.STROKE);
+                canvas.drawCircle(ex, ey, radius, blockStrokePaint);
+                blockStrokePaint.setStyle(Paint.Style.FILL);
+            } else {
+                RadialGradient grad = new RadialGradient(ex, ey, radius,
+                        new int[]{withAlpha(0xFFFFE359, alpha), withAlpha(0xFFFF5E3A, alpha), 0x00000000},
+                        new float[]{0.0f, 0.6f, 1.0f}, Shader.TileMode.CLAMP);
+                glowPaint.setShader(grad);
+                canvas.drawCircle(ex, ey, radius, glowPaint);
+                glowPaint.setShader(null);
+            }
+        }
+    }
+
+    private void drawBreakerOverlay(Canvas canvas) {
+        buttonPaint.setTextSize(dp(26));
+        drawButton(canvas, leftButton, "←", 0xCC143456, 0x6636D6FF);
+        drawButton(canvas, rotateButton, "↑", 0xCC2A2052, 0x66F47BF5);
+        drawButton(canvas, rightButton, "→", 0xCC143456, 0x6636D6FF);
+        drawButton(canvas, dropButton, "↓", 0xCC143456, 0x6636D6FF);
+
+        helperPaint.setTextSize(dp(11));
+        canvas.drawText("Drag screen or use ← → to move. Use ↑ to speed up, ↓ to speed down.",
+                getWidth() * 0.5f, dropButton.bottom + dp(22), helperPaint);
+
+        if (breakerEngine.isPaused()) {
+            overlayPaint.setColor(0xBB000000);
+            canvas.drawRect(0, 0, getWidth(), getHeight(), overlayPaint);
+
+            drawGlassCard(canvas, menuModalRect, 0xDD102136, 0x884ECFFF);
+            
+            overlayTextPaint.setTextSize(dp(28));
+            canvas.drawText("MENU", menuModalRect.centerX(), menuModalRect.top + dp(45), overlayTextPaint);
+            
+            buttonPaint.setTextSize(dp(20));
+            drawButton(canvas, continueBtnRect, "RESUME", 0xCC1D3952, 0x664ECFFF);
+            drawButton(canvas, restartBtnRect, "RESTART", 0xCC4A2834, 0x66FF9A84);
+            drawButton(canvas, homeBtnRect, "HOME", 0xCC2A2052, 0x66F47BF5);
+        } else if (breakerEngine.isGameOver()) {
+            overlayPaint.setColor(0xCC000000);
+            canvas.drawRect(0, 0, getWidth(), getHeight(), overlayPaint);
+
+            drawGlassCard(canvas, menuModalRect, 0xDD250E19, 0x88FF9A84);
+            overlayTextPaint.setTextSize(dp(30));
+            canvas.drawText("BREAKER OVER", menuModalRect.centerX(), menuModalRect.top + dp(50), overlayTextPaint);
+            
+            hudLabelPaint.setColor(applyTheme(0xFFFFD35A));
+            hudLabelPaint.setTextSize(dp(22));
+            canvas.drawText("SCORE: " + breakerEngine.getScore(), menuModalRect.centerX(), menuModalRect.top + dp(90), hudLabelPaint);
+            hudLabelPaint.setColor(Color.WHITE);
+            
+            buttonPaint.setTextSize(dp(20));
+            float mBtnW = menuModalRect.width() * 0.8f;
+            float mBtnH = dp(54);
+            float mBtnX = menuModalRect.left + (menuModalRect.width() - mBtnW) / 2f;
+            gameOverRestartBtnRect.set(mBtnX, menuModalRect.top + dp(120), mBtnX + mBtnW, menuModalRect.top + dp(120) + mBtnH);
+            gameOverMenuBtnRect.set(mBtnX, gameOverRestartBtnRect.bottom + dp(16), mBtnX + mBtnW, gameOverRestartBtnRect.bottom + dp(16) + mBtnH);
+
+            drawButton(canvas, gameOverRestartBtnRect, "RESTART", 0xCC4A2834, 0x66FF9A84);
+            drawButton(canvas, gameOverMenuBtnRect, "MAIN MENU", 0xCC2A2052, 0x66F47BF5);
+        }
+    }
+
+    private void updateBreakerSimulation(float delta) {
+        if (!breakerEngine.isPaused() && !breakerEngine.isGameOver()) {
+            if (isLeftButtonPressed) {
+                breakerEngine.movePaddleLeft(delta);
+            } else if (isRightButtonPressed) {
+                breakerEngine.movePaddleRight(delta);
+            }
+        }
+        breakerEngine.update(delta);
+
+        // Sound cues
+        if (breakerEngine.checkBounceSound()) {
+            playSound(soundRotate);
+        }
+        if (breakerEngine.checkDestroySound()) {
+            playSound(soundDrop);
+        }
+        if (breakerEngine.checkPowerupSound()) {
+            playSound(soundRotate);
+        }
+        if (breakerEngine.checkGameOverSound()) {
+            playSound(soundGameOver);
+        }
+
+        // Particle Bursts for falling row line bursts
+        float cell = boardRect.width() / BreakerEngine.COLS;
+        for (BreakerEngine.LineBurst burst : breakerEngine.getLineBursts()) {
+            if (!burst.emitted) {
+                burst.emitted = true;
+                emitLineBurst(burst.row, burst.colors, cell);
+                if (burst.catastrophic) {
+                    boardShake = Math.max(boardShake, 0.7f);
+                } else {
+                    boardShake = Math.max(boardShake, 0.25f);
+                }
+            }
+        }
+
+        // Save best score
+        int score = breakerEngine.getScore();
+        if (score > bestScoreBreaker) {
+            bestScoreBreaker = score;
+            getContext().getSharedPreferences("BrickSpaceNeoPrefs", Context.MODE_PRIVATE)
+                    .edit()
+                    .putInt("BEST_SCORE_BREAKER", bestScoreBreaker)
+                    .apply();
+        }
+    }
+
+    private void handleBreakerTouch(float x, float y, int action) {
+        if (breakerEngine.isPaused()) {
+            if (action == MotionEvent.ACTION_DOWN) {
+                if (contains(continueBtnRect, x, y)) {
+                    breakerEngine.togglePause();
+                    playSound(soundRotate);
+                } else if (contains(restartBtnRect, x, y)) {
+                    startGame();
+                    playSound(soundRotate);
+                } else if (contains(homeBtnRect, x, y)) {
+                    inMainMenu = true;
+                    breakerEngine.togglePause();
+                    updateMusic();
+                    playSound(soundRotate);
+                }
+            }
+            return;
+        }
+
+        if (breakerEngine.isGameOver()) {
+            if (action == MotionEvent.ACTION_DOWN) {
+                if (contains(gameOverRestartBtnRect, x, y)) {
+                    startGame();
+                    playSound(soundRotate);
+                } else if (contains(gameOverMenuBtnRect, x, y)) {
+                    inMainMenu = true;
+                    updateMusic();
+                    playSound(soundRotate);
+                }
+            }
+            return;
+        }
+
+        if (action == MotionEvent.ACTION_DOWN) {
+            if (contains(pauseButton, x, y)) {
+                breakerEngine.togglePause();
+                playSound(soundRotate);
+                return;
+            }
+
+            if (contains(leftButton, x, y)) {
+                isLeftButtonPressed = true;
+                return;
+            }
+            if (contains(rightButton, x, y)) {
+                isRightButtonPressed = true;
+                return;
+            }
+            if (contains(rotateButton, x, y)) { // UP speed up
+                breakerEngine.increaseSpeed();
+                playSound(soundRotate);
+                return;
+            }
+            if (contains(dropButton, x, y)) { // DOWN slow down
+                breakerEngine.decreaseSpeed();
+                playSound(soundRotate);
+                return;
+            }
+
+            // Drag touch on board/bottom zone
+            if (y > boardRect.top && y < boardRect.bottom + dp(40)) {
+                float touchCol = ((x - boardRect.left) / boardRect.width()) * BreakerEngine.COLS;
+                breakerEngine.setTargetPaddleX(touchCol);
+            }
+        } else if (action == MotionEvent.ACTION_MOVE) {
+            if (!isLeftButtonPressed && !isRightButtonPressed) {
+                if (y > boardRect.top && y < boardRect.bottom + dp(40)) {
+                    float touchCol = ((x - boardRect.left) / boardRect.width()) * BreakerEngine.COLS;
+                    breakerEngine.setTargetPaddleX(touchCol);
+                }
+            }
+        } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+            isLeftButtonPressed = false;
+            isRightButtonPressed = false;
         }
     }
 
