@@ -43,6 +43,14 @@ public class GameView extends View {
             0xFFFF6C6C
     };
 
+    private static final int[] COSMIC_COLORS = new int[]{
+            0xFF00E5FF, // Cyan
+            0xFFF21EE0, // Neon Pink
+            0xFFB293FE, // Soft Purple
+            0xFF1A33E0, // Blue
+            0xFFFFFFFF  // White
+    };
+
     private final Random random = new Random(11L);
 
     private final Paint backgroundPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -164,7 +172,6 @@ public class GameView extends View {
     private int soundFood, soundLevelUp;
     private boolean musicEnabled = true;
     private boolean soundsEnabled = true;
-    private final int themeMode = 0; // 0: Color (Other themes removed)
 
 
     public GameView(Context context) {
@@ -180,7 +187,7 @@ public class GameView extends View {
         bestScoreBreaker = prefs.getInt("BEST_SCORE_BREAKER", 0);
 
         gridPaint.setStyle(Paint.Style.STROKE);
-        gridPaint.setColor(applyTheme(0x18FFFFFF));
+        gridPaint.setColor(0x18FFFFFF);
 
         blockStrokePaint.setStyle(Paint.Style.STROKE);
         blockStrokePaint.setColor(0x44FFFFFF);
@@ -214,17 +221,31 @@ public class GameView extends View {
             orbs.add(new BackgroundOrb(random.nextFloat(), random.nextFloat(), random.nextFloat()));
         }
 
-        for (int i = 0; i < 15; i++) {
+        // Initialize 10 falling comets and 30 falling particles
+        for (int i = 0; i < 10; i++) {
             FloatingShape shape = new FloatingShape();
+            shape.type = 0; // Comet
             shape.x = random.nextFloat();
             shape.y = random.nextFloat();
-            shape.vx = (random.nextFloat() - 0.5f) * 0.08f;
-            shape.vy = (random.nextFloat() - 0.5f) * 0.08f;
+            shape.vy = 0.12f + random.nextFloat() * 0.12f;
+            shape.vx = -0.05f - random.nextFloat() * 0.07f;
             shape.rotation = random.nextFloat() * 360f;
             shape.spin = (random.nextFloat() - 0.5f) * 40f;
-            shape.type = random.nextInt(7);
-            shape.colorIndex = random.nextInt(PIECE_COLORS.length);
+            shape.colorIndex = random.nextInt(COSMIC_COLORS.length);
             shape.sizeScale = 0.5f + random.nextFloat() * 0.7f;
+            floatingShapes.add(shape);
+        }
+        for (int i = 0; i < 30; i++) {
+            FloatingShape shape = new FloatingShape();
+            shape.type = 1; // Particle
+            shape.x = random.nextFloat();
+            shape.y = random.nextFloat();
+            shape.vy = 0.08f + random.nextFloat() * 0.10f;
+            shape.vx = -0.03f - random.nextFloat() * 0.05f;
+            shape.rotation = random.nextFloat() * 360f;
+            shape.spin = (random.nextFloat() - 0.5f) * 40f;
+            shape.colorIndex = random.nextInt(COSMIC_COLORS.length);
+            shape.sizeScale = 0.4f + random.nextFloat() * 0.6f;
             floatingShapes.add(shape);
         }
         
@@ -233,31 +254,29 @@ public class GameView extends View {
         updateSystemBars();
     }
 
+    @SuppressWarnings("deprecation")
     private void updateSystemBars() {
         if (!(getContext() instanceof Activity)) return;
         Activity activity = (Activity) getContext();
         Window window = activity.getWindow();
         
-        // Brick Game (4) and DMG (2) are light backgrounds, need dark icons
-        boolean isLight = (themeMode == 4 || themeMode == 2);
-        
-        int flags = window.getDecorView().getSystemUiVisibility();
-        if (isLight) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                flags |= android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
-            }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                flags |= android.view.View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            android.view.WindowInsetsController controller = window.getDecorView().getWindowInsetsController();
+            if (controller != null) {
+                // Clear the light appearance flags so status/nav bar icons are light on dark
+                controller.setSystemBarsAppearance(0, android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS);
+                controller.setSystemBarsAppearance(0, android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS);
             }
         } else {
+            int flags = window.getDecorView().getSystemUiVisibility();
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 flags &= ~android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 flags &= ~android.view.View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
             }
+            window.getDecorView().setSystemUiVisibility(flags);
         }
-        window.getDecorView().setSystemUiVisibility(flags);
     }
 
     private void initAudio(Context context) {
@@ -332,9 +351,6 @@ public class GameView extends View {
         }
     }
 
-    private int applyTheme(int color) {
-        return color;
-    }
 
     private void playSound(int soundId) {
         if (soundsEnabled && soundPool != null) {
@@ -361,11 +377,20 @@ public class GameView extends View {
     }
 
     @Override
+    @SuppressWarnings("deprecation")
     public WindowInsets onApplyWindowInsets(WindowInsets insets) {
-        insetLeft = insets.getSystemWindowInsetLeft();
-        insetTop = insets.getSystemWindowInsetTop();
-        insetRight = insets.getSystemWindowInsetRight();
-        insetBottom = insets.getSystemWindowInsetBottom();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            android.graphics.Insets systemBars = insets.getInsets(WindowInsets.Type.systemBars());
+            insetLeft = systemBars.left;
+            insetTop = systemBars.top;
+            insetRight = systemBars.right;
+            insetBottom = systemBars.bottom;
+        } else {
+            insetLeft = insets.getSystemWindowInsetLeft();
+            insetTop = insets.getSystemWindowInsetTop();
+            insetRight = insets.getSystemWindowInsetRight();
+            insetBottom = insets.getSystemWindowInsetBottom();
+        }
         invalidate();
         return super.onApplyWindowInsets(insets);
     }
@@ -658,10 +683,14 @@ public class GameView extends View {
             shape.x += shape.vx * delta;
             shape.y += shape.vy * delta;
             shape.rotation += shape.spin * delta;
-            if (shape.x < -0.2f) shape.x = 1.2f;
-            if (shape.x > 1.2f) shape.x = -0.2f;
-            if (shape.y < -0.2f) shape.y = 1.2f;
-            if (shape.y > 1.2f) shape.y = -0.2f;
+            if (shape.y > 1.1f) {
+                shape.y = -0.1f;
+                shape.x = random.nextFloat() * 1.2f;
+            }
+            if (shape.x < -0.1f) {
+                shape.x = 1.1f;
+                shape.y = random.nextFloat() * 1.2f;
+            }
         }
     }
 
@@ -775,13 +804,13 @@ public class GameView extends View {
         float tileWidth = (usableWidth - dp(16)) / 2f;
         float tileHeight = dp(110);
         float tileTop = height * 0.24f;
-        bricksTileRect.set(usableLeft, tileTop, usableLeft + tileWidth, tileTop + tileHeight);
-        snakeTileRect.set(bricksTileRect.right + dp(16), tileTop, bricksTileRect.right + dp(16) + tileWidth, tileTop + tileHeight);
+        bricksTileRect.set(usableLeft, tileTop, usableRight, tileTop + tileHeight);
         
-        columnsTileRect.set(usableLeft, snakeTileRect.bottom + dp(12), usableLeft + tileWidth, snakeTileRect.bottom + dp(12) + tileHeight);
-        collapseTileRect.set(columnsTileRect.right + dp(16), snakeTileRect.bottom + dp(12), columnsTileRect.right + dp(16) + tileWidth, snakeTileRect.bottom + dp(12) + tileHeight);
+        snakeTileRect.set(usableLeft, bricksTileRect.bottom + dp(12), usableLeft + tileWidth, bricksTileRect.bottom + dp(12) + tileHeight);
+        columnsTileRect.set(snakeTileRect.right + dp(16), bricksTileRect.bottom + dp(12), snakeTileRect.right + dp(16) + tileWidth, bricksTileRect.bottom + dp(12) + tileHeight);
         
-        breakerTileRect.set(usableLeft, columnsTileRect.bottom + dp(12), usableRight, columnsTileRect.bottom + dp(12) + tileHeight);
+        collapseTileRect.set(usableLeft, columnsTileRect.bottom + dp(12), usableLeft + tileWidth, columnsTileRect.bottom + dp(12) + tileHeight);
+        breakerTileRect.set(collapseTileRect.right + dp(16), columnsTileRect.bottom + dp(12), collapseTileRect.right + dp(16) + tileWidth, columnsTileRect.bottom + dp(12) + tileHeight);
         
         gameSelectionBackBtnRect.set(mmBtnLeft, breakerTileRect.bottom + dp(22), mmBtnLeft + mmBtnWidth, breakerTileRect.bottom + dp(22) + mmBtnHeight);
 
@@ -807,26 +836,34 @@ public class GameView extends View {
         overlayTextPaint.setTextSize(dp(28));
         helperPaint.setTextSize(dp(12));
         
-        int headerColor = applyTheme(0xFFFFFFFF);
+        int headerColor = 0xFFFFFFFF;
         titlePaint.setColor(headerColor);
         hudValuePaint.setColor(headerColor);
-        hudLabelPaint.setColor(applyTheme(0xFFD8F4FF));
+        hudLabelPaint.setColor(0xFFD8F4FF);
         buttonPaint.setColor(headerColor);
         overlayTextPaint.setColor(headerColor);
-        helperPaint.setColor(applyTheme(0xFFB8E1FF));
+        helperPaint.setColor(0xFFB8E1FF);
 
         gridPaint.setStrokeWidth(dp(1));
         blockStrokePaint.setStrokeWidth(dp(1.3f));
     }
 
     private void drawBackground(Canvas canvas, float time) {
-        // Black (#000000) at top to Dark Purple (#0F033E) at bottom
-        int[] bgColors = new int[]{0xFF000000, 0xFF040114, 0xFF080228, 0xFF0F033E};
-        if (themeMode == 3) bgColors = new int[]{0xFF000510, 0xFF000A1A, 0xFF001026, 0xFF000510};
-        else if (themeMode == 4) bgColors = new int[]{0xFF9CA67B, 0xFF9CA67B, 0xFF9CA67B, 0xFF9CA67B};
-        else if (themeMode != 0) {
-            for (int i = 0; i < bgColors.length; i++) bgColors[i] = applyTheme(bgColors[i]);
+        if (inMainMenu || inGameSelection) {
+            // Main menu background - vertical gradient: top #020109, bottom #2a1b50
+            int[] bgColors = new int[]{0xFF020109, 0xFF2A1B50};
+            backgroundPaint.setShader(new LinearGradient(
+                    0, 0, 0, getHeight(),
+                    bgColors,
+                    new float[]{0f, 1f},
+                    Shader.TileMode.CLAMP
+            ));
+            canvas.drawRect(0, 0, getWidth(), getHeight(), backgroundPaint);
+            return;
         }
+
+        // Black (#000000) at top to Dark Purple (#0F033E) at bottom (Default gameplay background)
+        int[] bgColors = new int[]{0xFF000000, 0xFF040114, 0xFF080228, 0xFF0F033E};
         backgroundPaint.setShader(new LinearGradient(
                 0, 0, 0, getHeight(),
                 bgColors,
@@ -835,20 +872,18 @@ public class GameView extends View {
         ));
         canvas.drawRect(0, 0, getWidth(), getHeight(), backgroundPaint);
 
-        if (themeMode != 4) {
-            glowPaint.setShader(new RadialGradient(
-                    getWidth() * 0.2f, getHeight() * 0.18f, getWidth() * 0.44f,
-                    applyTheme(0x3D7F00FF), 0x00000000, Shader.TileMode.CLAMP // Purple neon glow
-            ));
-            canvas.drawCircle(getWidth() * 0.2f, getHeight() * 0.18f, getWidth() * 0.44f, glowPaint);
+        glowPaint.setShader(new RadialGradient(
+                getWidth() * 0.2f, getHeight() * 0.18f, getWidth() * 0.44f,
+                0x3D7F00FF, 0x00000000, Shader.TileMode.CLAMP // Purple neon glow
+        ));
+        canvas.drawCircle(getWidth() * 0.2f, getHeight() * 0.18f, getWidth() * 0.44f, glowPaint);
 
-            glowPaint.setShader(new RadialGradient(
-                    getWidth() * 0.85f, getHeight() * 0.16f, getWidth() * 0.26f,
-                    applyTheme(0x2AFF00AA), 0x00000000, Shader.TileMode.CLAMP // Magenta neon glow
-            ));
-            canvas.drawCircle(getWidth() * 0.85f, getHeight() * 0.16f, getWidth() * 0.26f, glowPaint);
-            glowPaint.setShader(null);
-        }
+        glowPaint.setShader(new RadialGradient(
+                getWidth() * 0.85f, getHeight() * 0.16f, getWidth() * 0.26f,
+                0x2AFF00AA, 0x00000000, Shader.TileMode.CLAMP // Magenta neon glow
+        ));
+        canvas.drawCircle(getWidth() * 0.85f, getHeight() * 0.16f, getWidth() * 0.26f, glowPaint);
+        glowPaint.setShader(null);
 
         for (BackgroundOrb orb : orbs) {
             float x = orb.x * getWidth();
@@ -858,25 +893,16 @@ public class GameView extends View {
             y += orb.pullOffset + dp(36) * orbLinePull;
             float radius = dp(3 + 7 * orb.speed) * (1f + orbLinePull * 0.12f);
             int color = Color.argb((int) (40 + orb.speed * 55 + orbLinePull * 18), 190, 244, 255);
-            if (themeMode == 4) {
-                glowPaint.setColor(withAlpha(0xFF000000, 0.08f)); // Very faint black for background contrast
-            } else {
-                glowPaint.setColor(applyTheme(color));
-            }
+            glowPaint.setColor(color);
             canvas.drawCircle(x, y, radius, glowPaint);
         }
 
-        if (themeMode == 4) {
-            drawBlob(canvas, getWidth() * 0.08f, getHeight() * 0.76f, dp(110), 0x12000000, time * 0.7f);
-            drawBlob(canvas, getWidth() * 0.88f, getHeight() * 0.72f, dp(92), 0x12000000, time * 0.9f + 1.4f);
-        } else {
-            drawBlob(canvas, getWidth() * 0.08f, getHeight() * 0.76f, dp(110), applyTheme(0x1A00F0FF), time * 0.7f); // Neon cyan blob
-            drawBlob(canvas, getWidth() * 0.88f, getHeight() * 0.72f, dp(92), applyTheme(0x1D9D7BFF), time * 0.9f + 1.4f); // Neon purple blob
-        }
+        drawBlob(canvas, getWidth() * 0.08f, getHeight() * 0.76f, dp(110), 0x1A00F0FF, time * 0.7f); // Neon cyan blob
+        drawBlob(canvas, getWidth() * 0.88f, getHeight() * 0.72f, dp(92), 0x1D9D7BFF, time * 0.9f + 1.4f); // Neon purple blob
     }
 
     private void drawHud(Canvas canvas) {
-        drawGlassCard(canvas, pauseButton, 0xCC143456, 0x6636D6FF);
+        drawButton(canvas, pauseButton, "", 0xCC143456, 0x6636D6FF);
         drawGlassCard(canvas, bestScoreRect, 0xCC143456, 0x6636D6FF);
         drawGlassCard(canvas, mainScoreRect, 0xCC143456, 0x6636D6FF);
         drawGlassCard(canvas, nextRect, 0xC81C3045, 0x66FFE77B);
@@ -940,29 +966,13 @@ public class GameView extends View {
         canvas.drawRoundRect(boardGlowRect, dp(28), dp(28), glowPaint);
         glowPaint.setShader(null);
 
-        if (themeMode != 4) {
-            boardPaint.setShader(new LinearGradient(
-                    boardRect.left, boardRect.top, boardRect.left, boardRect.bottom,
-                    applyTheme(0xE8182940), applyTheme(0xF00A1526), Shader.TileMode.CLAMP
-            ));
-            canvas.drawRoundRect(boardRect, dp(26), dp(26), boardPaint);
-            boardPaint.setShader(null);
-        } else {
-            // Just a thin black border for the board in Brick Game mode
-            // Inflate it slightly so it doesn't touch the cells
-            RectF outerBoard = new RectF(boardRect);
-            outerBoard.inset(-dp(5), -dp(5));
-            blockStrokePaint.setColor(0xFF000000);
-            blockStrokePaint.setStrokeWidth(dp(2.5f));
-            canvas.drawRoundRect(outerBoard, dp(30), dp(30), blockStrokePaint);
-            blockStrokePaint.setStrokeWidth(dp(1.3f));
-        }
+        drawPlayfieldBackgroundAndStroke(canvas, boardRect);
 
         float cell = boardRect.width() / TetraEngine.COLS;
         float rowHeight = boardRect.height() / TetraEngine.ROWS;
 
-        gridPaint.setColor(applyTheme(0x18FFFFFF));
-        blockStrokePaint.setColor(applyTheme(0x44FFFFFF));
+        gridPaint.setColor(0x18FFFFFF);
+        blockStrokePaint.setColor(0x44FFFFFF);
         for (int row = 0; row < TetraEngine.ROWS; row++) {
             for (int col = 0; col < TetraEngine.COLS; col++) {
                 RectF rect = cellRect(col, row, cell, rowHeight);
@@ -1005,7 +1015,7 @@ public class GameView extends View {
 
         for (JellyParticle particle : particles) {
             float alpha = Math.max(0f, 1f - particle.age / particle.life);
-            sparkPaint.setColor(applyTheme(withAlpha(PIECE_COLORS[particle.colorIndex], alpha * 0.95f)));
+            sparkPaint.setColor(withAlpha(PIECE_COLORS[particle.colorIndex], alpha * 0.95f));
             canvas.save();
             canvas.translate(particle.x, particle.y);
             canvas.rotate(particle.rotation);
@@ -1014,7 +1024,7 @@ public class GameView extends View {
             float sy = particle.size * (1f - 0.16f * (float) Math.sin(particle.age * 8f + particle.phase) - stretch * 0.1f);
             canvas.scale(Math.max(0.72f, sx / particle.size), Math.max(0.72f, sy / particle.size));
             canvas.drawCircle(0, 0, particle.size, sparkPaint);
-            sparkPaint.setColor(applyTheme(withAlpha(lighten(PIECE_COLORS[particle.colorIndex], 0.32f), alpha * 0.55f)));
+            sparkPaint.setColor(withAlpha(lighten(PIECE_COLORS[particle.colorIndex], 0.32f), alpha * 0.55f));
             canvas.drawCircle(-particle.size * 0.22f, -particle.size * 0.22f, particle.size * 0.42f, sparkPaint);
             canvas.restore();
         }
@@ -1059,7 +1069,7 @@ public class GameView extends View {
             canvas.drawText("BRICKS COLLAPSE", menuModalRect.centerX(), menuModalRect.top + dp(50), overlayTextPaint);
             
             // Score in Yellow
-            hudLabelPaint.setColor(applyTheme(0xFFFFD35A));
+            hudLabelPaint.setColor(0xFFFFD35A);
             hudLabelPaint.setTextSize(dp(22));
             canvas.drawText("SCORE: " + engine.getScore(), menuModalRect.centerX(), menuModalRect.top + dp(90), hudLabelPaint);
             hudLabelPaint.setColor(Color.WHITE);
@@ -1080,26 +1090,53 @@ public class GameView extends View {
     private void drawFloatingShapes(Canvas canvas) {
         float width = getWidth();
         float height = getHeight();
-        float cellSize = dp(20);
-        
-        // 20% more transparent overall = 80% opacity (204 out of 255)
-        Paint alphaPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        alphaPaint.setAlpha(204);
-        
+
+        // Draw comets and particles with 70% opacity (178 out of 255)
         for (FloatingShape shape : floatingShapes) {
-            canvas.saveLayer(null, alphaPaint);
-            canvas.translate(shape.x * width, shape.y * height);
-            canvas.rotate(shape.rotation);
-            canvas.scale(shape.sizeScale, shape.sizeScale);
-            
-            int[][] cells = TetraEngine.getShapeCells(shape.type, 0);
-            for (int[] cell : cells) {
-                float cx = (cell[0] - 1.5f) * cellSize;
-                float cy = (cell[1] - 1.5f) * cellSize;
-                RectF rect = new RectF(cx, cy, cx + cellSize - dp(2), cy + cellSize - dp(2));
-                drawJellyCellAt(canvas, rect, shape.colorIndex, 0f, 0f, true, false, false);
+            float startX = shape.x * width;
+            float startY = shape.y * height;
+            int baseColor = COSMIC_COLORS[shape.colorIndex % COSMIC_COLORS.length];
+            int headColor = withAlpha(baseColor, 0.70f);
+
+            if (shape.type == 0) {
+                // Comet trail
+                float len = (float) Math.hypot(shape.vx * width, shape.vy * height);
+                if (len > 0f) {
+                    float dx = (shape.vx * width) / len;
+                    float dy = (shape.vy * height) / len;
+                    
+                    float trailLength = dp(40f + 40f * shape.sizeScale);
+                    float endX = startX - dx * trailLength;
+                    float endY = startY - dy * trailLength;
+                    
+                    Paint trailPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+                    trailPaint.setStyle(Paint.Style.STROKE);
+                    trailPaint.setStrokeWidth(dp(2f + 2f * shape.sizeScale));
+                    trailPaint.setStrokeCap(Paint.Cap.ROUND);
+                    
+                    int tailColor = 0x00000000;
+                    Shader shader = new LinearGradient(
+                            startX, startY, endX, endY,
+                            headColor, tailColor,
+                            Shader.TileMode.CLAMP
+                    );
+                    trailPaint.setShader(shader);
+                    canvas.drawLine(startX, startY, endX, endY, trailPaint);
+                }
+                
+                Paint headPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+                headPaint.setStyle(Paint.Style.FILL);
+                headPaint.setColor(headColor);
+                float radius = dp(3f + 3f * shape.sizeScale);
+                canvas.drawCircle(startX, startY, radius, headPaint);
+            } else {
+                // Particle
+                Paint partPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+                partPaint.setStyle(Paint.Style.FILL);
+                partPaint.setColor(headColor);
+                float radius = dp(1.5f + 1.5f * shape.sizeScale);
+                canvas.drawCircle(startX, startY, radius, partPaint);
             }
-            canvas.restore();
         }
     }
 
@@ -1109,11 +1146,7 @@ public class GameView extends View {
 
         // Premium Logo Rendering (PNG Logo) - 1.3x (reduced by 0.2), placed 30px lower with overlap prevention
         if (logoDrawable != null) {
-            if (themeMode == 4) {
-                logoDrawable.setColorFilter(new android.graphics.PorterDuffColorFilter(0xFF000000, android.graphics.PorterDuff.Mode.SRC_IN));
-            } else {
-                logoDrawable.setColorFilter(null);
-            }
+            logoDrawable.setColorFilter(null);
             float aspect = (float)logoDrawable.getIntrinsicWidth() / logoDrawable.getIntrinsicHeight();
             float logoW = Math.min(dp(280) * 1.3f, getWidth() - dp(24));
             float logoH = logoW / aspect;
@@ -1148,6 +1181,8 @@ public class GameView extends View {
         
         // Footer text at the bottom safe zone
         if (!inOptions) {
+            int originalColor = helperPaint.getColor();
+            helperPaint.setColor(0xFFB293FE);
             helperPaint.setTextSize(dp(13));
             helperPaint.setAlpha(160);
             float footerY = getHeight() - insetBottom - dp(75);
@@ -1155,6 +1190,7 @@ public class GameView extends View {
             canvas.drawText("v1.0.3", getWidth() / 2f, footerY + dp(18), helperPaint);
             canvas.drawText("Build combos. Set records.", getWidth() / 2f, footerY + dp(36), helperPaint);
             helperPaint.setAlpha(255);
+            helperPaint.setColor(originalColor);
         }
         
         buttonPaint.setTextSize(dp(22));
@@ -1178,11 +1214,9 @@ public class GameView extends View {
             drawButton(canvas, soundBtn, soundsEnabled ? "Sounds: ON" : "Sounds: OFF", 0xCC2A2052, 0x66F47BF5);
             drawButton(canvas, backBtn, "Back", 0xCC4A2834, 0x66FF9A84);
 
-            // Footer Reset Button (Red)
+            // Footer Reset Button
             buttonPaint.setTextSize(dp(18));
-            drawGlassCard(canvas, resetScoresBtnRect, 0xCC7A1020, 0x88FF3050); // Deep red
-            float baseline = resetScoresBtnRect.centerY() - (buttonPaint.descent() + buttonPaint.ascent()) * 0.5f;
-            canvas.drawText("Reset Best Scores", resetScoresBtnRect.centerX(), baseline, buttonPaint);
+            drawButton(canvas, resetScoresBtnRect, "Reset Best Scores", 0xCC7A1020, 0x88FF3050);
             buttonPaint.setTextSize(dp(22));
             
             // Temporary rects for touch detection
@@ -1204,27 +1238,15 @@ public class GameView extends View {
         // Higher contrast background
         glowPaint.setShader(null);
         glowPaint.setStyle(Paint.Style.FILL);
-        glowPaint.setColor(themeMode == 4 || themeMode == 2 ? 0x22000000 : 0xAA000000); // Darker
+        glowPaint.setColor(0xAA000000); // Darker
         canvas.drawRoundRect(bar, dp(12), dp(12), glowPaint);
-        
-        // Optional stroke for retro themes
-        if (themeMode == 4 || themeMode == 2 || themeMode == 1) {
-            blockStrokePaint.setColor(applyTheme(0xFF000000));
-            blockStrokePaint.setStrokeWidth(dp(1.2f));
-            canvas.drawRoundRect(bar, dp(12), dp(12), blockStrokePaint);
-        }
 
         float fill = engine.getCycleProgress();
         RectF fillRect = new RectF(bar.left, bar.top, bar.left + bar.width() * fill, bar.bottom);
-        if (themeMode == 4 || themeMode == 2 || themeMode == 1) {
-            glowPaint.setColor(applyTheme(0xFF000000));
-            canvas.drawRoundRect(fillRect, dp(12), dp(12), glowPaint);
-        } else {
-            glowPaint.setShader(new LinearGradient(fillRect.left, fillRect.top, fillRect.right, fillRect.bottom,
-                    0xFFF093FB, 0xFF43E97B, Shader.TileMode.CLAMP)); // Purple to Green
-            canvas.drawRoundRect(fillRect, dp(12), dp(12), glowPaint);
-            glowPaint.setShader(null);
-        }
+        glowPaint.setShader(new LinearGradient(fillRect.left, fillRect.top, fillRect.right, fillRect.bottom,
+                new int[]{0xFF009AFC, 0xFF1A33E0, 0xFF7912D3, 0xFFF21EE0}, null, Shader.TileMode.CLAMP));
+        canvas.drawRoundRect(fillRect, dp(12), dp(12), glowPaint);
+        glowPaint.setShader(null);
 
         helperPaint.setTextSize(dp(11));
         String progressText = "LEVEL " + engine.getDisplayLevel() + " • " + engine.getLinesToNextLevel() + " LINES TO NEXT";
@@ -1263,71 +1285,136 @@ public class GameView extends View {
             float x = startX + cell[0] * previewCell;
             float y = startY + cell[1] * previewCell;
             RectF rect = new RectF(x, y, x + previewCell - dp(4), y + previewCell - dp(4));
-            if (themeMode == 4) {
-                // Nested style for next piece too
-                blockStrokePaint.setColor(0xFF000000);
-                blockStrokePaint.setStrokeWidth(dp(1.8f));
-                canvas.drawRoundRect(rect, dp(6), dp(6), blockStrokePaint);
-                RectF inner = new RectF(rect.left + dp(3.5f), rect.top + dp(3.5f), rect.right - dp(3.5f), rect.bottom - dp(3.5f));
-                blockPaint.setColor(0xFF000000);
-                blockPaint.setStyle(Paint.Style.FILL);
-                canvas.drawRoundRect(inner, dp(2), dp(2), blockPaint);
-            } else {
-                glowPaint.setColor(applyTheme(withAlpha(PIECE_COLORS[piece.type], 0.95f)));
-                canvas.drawRoundRect(rect, dp(10), dp(10), glowPaint);
-            }
+            glowPaint.setColor(withAlpha(PIECE_COLORS[piece.type], 0.95f));
+            canvas.drawRoundRect(rect, dp(10), dp(10), glowPaint);
         }
     }
 
     private void drawGlassCard(Canvas canvas, RectF rect, int topColor, int rimColor) {
-        int bottomColor = 0xD20C1527;
-        if (themeMode == 2) bottomColor = 0xFF204020; // More opaque dark green for DMG
-        else if (themeMode == 3) bottomColor = 0xFF001020; // Darker for Electro
-        
-        if (themeMode == 4) {
-            // Fill with background color to block what's behind (especially important for menus)
-            blockPaint.setColor(0xFF9CA67B);
-            blockPaint.setStyle(Paint.Style.FILL);
-            canvas.drawRoundRect(rect, dp(22), dp(22), blockPaint);
+        if (rect == mainScoreRect || rect == bestScoreRect || rect == nextRect || rect == progressRect || rect == snakeLevelBarRect || rect == snakeLivesPanelRect || rect == menuModalRect) {
+            Paint fillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            fillPaint.setStyle(Paint.Style.FILL);
 
-            // Thin black stroke
-            blockStrokePaint.setColor(0xFF000000);
-            blockStrokePaint.setStrokeWidth(dp(1.5f));
-            canvas.drawRoundRect(rect, dp(22), dp(22), blockStrokePaint);
-            blockStrokePaint.setStrokeWidth(dp(1.3f));
+            Paint strokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            strokePaint.setStyle(Paint.Style.STROKE);
+            strokePaint.setStrokeWidth(dp(2f));
+
+            if (rect == mainScoreRect || rect == bestScoreRect) {
+                // SCORE and BEST specific style
+                fillPaint.setColor(withAlpha(0xFF141335, 0.20f));
+                canvas.drawRoundRect(rect, dp(22), dp(22), fillPaint);
+
+                int[] strokeColors = new int[]{0xFF9432A9, 0xFF0C0C63, 0xFF6034E8};
+                strokePaint.setShader(createAngledGradient(rect, strokeColors, null, -40f));
+            } else if (rect == menuModalRect) {
+                // Pause and Game Over modal backing: #141335, 85% opacity (slightly transparent), no outline
+                fillPaint.setColor(withAlpha(0xFF141335, 0.85f));
+                canvas.drawRoundRect(rect, dp(22), dp(22), fillPaint);
+                return;
+            } else {
+                // Other HUD cards style
+                int startColor = withAlpha(0xFF2A3780, 0.30f);
+                int endColor = withAlpha(0xFF33439D, 0.30f);
+                fillPaint.setShader(createAngledGradient(rect, new int[]{startColor, endColor}, null, -90f));
+                canvas.drawRoundRect(rect, dp(22), dp(22), fillPaint);
+
+                strokePaint.setColor(0xFF6188FF);
+            }
+
+            RectF strokeRect = new RectF(rect.left + dp(1), rect.top + dp(1), rect.right - dp(1), rect.bottom - dp(1));
+            canvas.drawRoundRect(strokeRect, dp(21), dp(21), strokePaint);
             return;
         }
-        boardPaint.setShader(new LinearGradient(rect.left, rect.top, rect.left, rect.bottom, applyTheme(topColor), applyTheme(bottomColor), Shader.TileMode.CLAMP));
+        
+        int bottomColor = 0xD20C1527;
+        boardPaint.setShader(new LinearGradient(rect.left, rect.top, rect.left, rect.bottom, topColor, bottomColor, Shader.TileMode.CLAMP));
         canvas.drawRoundRect(rect, dp(22), dp(22), boardPaint);
         boardPaint.setShader(null);
 
-        int rimAlpha = (themeMode == 2) ? 0x88FFFFFF : 0x00FFFFFF;
-        glowPaint.setShader(new LinearGradient(rect.left, rect.top, rect.right, rect.bottom, applyTheme(rimColor), applyTheme(rimAlpha), Shader.TileMode.CLAMP));
+        glowPaint.setShader(new LinearGradient(rect.left, rect.top, rect.right, rect.bottom, rimColor, 0x00FFFFFF, Shader.TileMode.CLAMP));
         canvas.drawRoundRect(new RectF(rect.left + dp(1), rect.top + dp(1), rect.right - dp(1), rect.bottom - dp(1)),
                 dp(22), dp(22), glowPaint);
         glowPaint.setShader(null);
     }
 
+    private void drawPlayfieldBackgroundAndStroke(Canvas canvas, RectF rect) {
+        // Fill: #030b21 with 20% opacity
+        boardPaint.setStyle(Paint.Style.FILL);
+        boardPaint.setShader(null);
+        boardPaint.setColor(withAlpha(0xFF030B21, 0.20f));
+        canvas.drawRoundRect(rect, dp(26), dp(26), boardPaint);
+
+        // Stroke: gradient #13bff7, #53ebfa, #0c0c63, #602fd6, #6034e8, angle 60 degrees
+        Paint strokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        strokePaint.setStyle(Paint.Style.STROKE);
+        strokePaint.setStrokeWidth(dp(2.5f));
+        int[] strokeColors = new int[]{0xFF13BFF7, 0xFF53EBFA, 0xFF0C0C63, 0xFF602FD6, 0xFF6034E8};
+        strokePaint.setShader(createAngledGradient(rect, strokeColors, null, 60f));
+
+        RectF strokeRect = new RectF(rect.left + dp(1), rect.top + dp(1), rect.right - dp(1), rect.bottom - dp(1));
+        canvas.drawRoundRect(strokeRect, dp(25), dp(25), strokePaint);
+    }
+
+    private Shader createAngledGradient(RectF rect, int[] colors, float[] positions, float angleDegrees) {
+        float cx = rect.centerX();
+        float cy = rect.centerY();
+        float r = (float) Math.hypot(rect.width(), rect.height()) / 2f;
+        float angleRad = (float) Math.toRadians(angleDegrees);
+        
+        float dx = (float) Math.cos(angleRad);
+        float dy = -(float) Math.sin(angleRad); // negative because Y is downwards in Android
+        
+        float x0 = cx - r * dx;
+        float y0 = cy - r * dy;
+        float x1 = cx + r * dx;
+        float y1 = cy + r * dy;
+        
+        return new LinearGradient(x0, y0, x1, y1, colors, positions, Shader.TileMode.CLAMP);
+    }
+
     private void drawButton(Canvas canvas, RectF rect, String label, int fillColor, int glowColor) {
-        drawGlassCard(canvas, rect, fillColor, glowColor);
+        Paint btnPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        Paint strokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        strokePaint.setStyle(Paint.Style.STROKE);
+        strokePaint.setStrokeWidth(dp(2f));
+
+        if (label.equalsIgnoreCase("Start Game") || rect == pauseButton || rect == rotateButton) {
+            // Fill: gradient from #502a80 to #3d339d, 30% opacity, angle -30 degrees
+            int startColor = withAlpha(0xFF502A80, 0.30f);
+            int endColor = withAlpha(0xFF3D339D, 0.30f);
+            btnPaint.setShader(createAngledGradient(rect, new int[]{startColor, endColor}, null, -30f));
+            canvas.drawRoundRect(rect, dp(22), dp(22), btnPaint);
+
+            // Stroke: gradient #009afc, #1a33e0, #7912d3, #f21ee0, angle 120 degrees, non-transparent
+            int[] strokeColors = new int[]{0xFF009AFC, 0xFF1A33E0, 0xFF7912D3, 0xFFF21EE0};
+            strokePaint.setShader(createAngledGradient(rect, strokeColors, null, 120f));
+            
+            RectF strokeRect = new RectF(rect.left + dp(1), rect.top + dp(1), rect.right - dp(1), rect.bottom - dp(1));
+            canvas.drawRoundRect(strokeRect, dp(21), dp(21), strokePaint);
+        } else {
+            // All other UI buttons: gradient from #2a3780 and #33439d, 30% opacity, angle -90 degrees
+            int startColor = withAlpha(0xFF2A3780, 0.30f);
+            int endColor = withAlpha(0xFF33439D, 0.30f);
+            btnPaint.setShader(createAngledGradient(rect, new int[]{startColor, endColor}, null, -90f));
+            canvas.drawRoundRect(rect, dp(22), dp(22), btnPaint);
+
+            // Border: solid #6188ff, non-transparent
+            strokePaint.setColor(0xFF6188FF);
+            RectF strokeRect = new RectF(rect.left + dp(1), rect.top + dp(1), rect.right - dp(1), rect.bottom - dp(1));
+            canvas.drawRoundRect(strokeRect, dp(21), dp(21), strokePaint);
+        }
+
         float baseline = rect.centerY() - (buttonPaint.descent() + buttonPaint.ascent()) * 0.5f;
         canvas.drawText(label, rect.centerX(), baseline, buttonPaint);
     }
 
     private void drawGhostCell(Canvas canvas, int col, int row, int colorIndex, float cell, float rowHeight) {
         RectF rect = cellRect(col, row, cell, rowHeight);
-        if (themeMode == 4) {
-            blockStrokePaint.setColor(0xFF000000);
-            blockStrokePaint.setStrokeWidth(dp(1.8f));
-            canvas.drawRoundRect(rect, dp(6), dp(6), blockStrokePaint);
-            blockStrokePaint.setStrokeWidth(dp(1.3f));
-        } else {
-            int baseColor = PIECE_COLORS[colorIndex % PIECE_COLORS.length];
-            glowPaint.setColor(applyTheme(withAlpha(baseColor, 0.16f)));
-            canvas.drawRoundRect(rect, dp(12), dp(12), glowPaint);
-            blockStrokePaint.setColor(applyTheme(withAlpha(baseColor, 0.40f)));
-            canvas.drawRoundRect(rect, dp(12), dp(12), blockStrokePaint);
-        }
+        int baseColor = PIECE_COLORS[colorIndex % PIECE_COLORS.length];
+        glowPaint.setColor(withAlpha(baseColor, 0.16f));
+        canvas.drawRoundRect(rect, dp(12), dp(12), glowPaint);
+        blockStrokePaint.setColor(withAlpha(baseColor, 0.40f));
+        canvas.drawRoundRect(rect, dp(12), dp(12), blockStrokePaint);
     }
 
     private void drawAutoScaledText(Canvas canvas, String text, float x, float y, float maxW, Paint paint, float baseSize) {
@@ -1362,7 +1449,7 @@ public class GameView extends View {
         int baseColor = PIECE_COLORS[colorIndex % PIECE_COLORS.length];
 
         if (isGhost) {
-            blockStrokePaint.setColor(withAlpha(applyTheme(baseColor), 0.45f));
+            blockStrokePaint.setColor(withAlpha(baseColor, 0.45f));
             blockStrokePaint.setStyle(Paint.Style.STROKE);
             blockStrokePaint.setStrokeWidth(dp(2f));
             canvas.drawRoundRect(rect, radius, radius, blockStrokePaint);
@@ -1371,73 +1458,23 @@ public class GameView extends View {
             return;
         }
 
-        if (themeMode == 4) {
-            // Authentic Brick Game Nested Style
-            blockStrokePaint.setColor(0xFF000000);
-            blockStrokePaint.setStrokeWidth(dp(2.2f));
-            canvas.drawRoundRect(rect, radius, radius, blockStrokePaint);
-            
-            float inset = dp(5);
-            RectF inner = new RectF(rect.left + inset, rect.top + inset, rect.right - inset, rect.bottom - inset);
-            blockPaint.setColor(0xFF000000);
-            blockPaint.setStyle(Paint.Style.FILL);
-            canvas.drawRoundRect(inner, dp(3), dp(3), blockPaint);
-            if (!showPattern) return;
-        }
-
-        if (themeMode == 3) { // ELECTRO
-            // Dark Base
-            blockPaint.setStyle(Paint.Style.FILL);
-            blockPaint.setColor(0xFF000510);
-            canvas.drawRoundRect(rect, radius, radius, blockPaint);
-            
-            // Neon Stroke
-            blockStrokePaint.setColor(baseColor);
-            blockStrokePaint.setStrokeWidth(dp(3.5f));
-            canvas.drawRoundRect(rect, radius, radius, blockStrokePaint);
-            blockStrokePaint.setStrokeWidth(dp(1.3f)); // Restore
-            
-            // Inner Glow (Sphere)
-            glowPaint.setShader(new RadialGradient(rect.centerX(), rect.centerY(), rect.width() * 0.5f,
-                    withAlpha(baseColor, 0.8f), 0x00000000, Shader.TileMode.CLAMP));
-            canvas.drawCircle(rect.centerX(), rect.centerY(), rect.width() * 0.42f, glowPaint);
-            glowPaint.setShader(null);
-            
-            // Highlight
-            glowPaint.setColor(withAlpha(lighten(baseColor, 0.4f), 0.6f));
-            canvas.drawCircle(rect.centerX() - dp(3), rect.centerY() - dp(3), rect.width() * 0.15f, glowPaint);
-            if (!showPattern) return;
-        }
-
-        if (themeMode != 4) {
-            shadowPaint.setAlpha(active ? 120 : 70);
-            canvas.drawRoundRect(new RectF(rect.left, rect.top + dp(4), rect.right, rect.bottom + dp(4)), radius, radius, shadowPaint);
-        }
+        shadowPaint.setAlpha(active ? 120 : 70);
+        canvas.drawRoundRect(new RectF(rect.left, rect.top + dp(4), rect.right, rect.bottom + dp(4)), radius, radius, shadowPaint);
 
         blockPaint.setShader(new LinearGradient(rect.left, rect.top, rect.right, rect.bottom,
-                applyTheme(lighten(baseColor, 0.22f)), applyTheme(darken(baseColor, 0.18f)), Shader.TileMode.CLAMP));
+                lighten(baseColor, 0.22f), darken(baseColor, 0.18f), Shader.TileMode.CLAMP));
         canvas.drawRoundRect(rect, radius, radius, blockPaint);
         blockPaint.setShader(null);
 
         RectF sheenRect = new RectF(rect.left + dp(3), rect.top + dp(3), rect.right - dp(7), rect.top + rect.height() * 0.45f);
-        blockShadePaint.setColor(applyTheme(withAlpha(lighten(baseColor, 0.34f), active ? 0.42f : 0.28f)));
+        blockShadePaint.setColor(withAlpha(lighten(baseColor, 0.34f), active ? 0.42f : 0.28f));
         canvas.drawRoundRect(sheenRect, radius, radius, blockShadePaint);
 
-        blockStrokePaint.setColor(applyTheme(withAlpha(0xFFFFFFFF, active ? 0.42f : 0.24f)));
+        blockStrokePaint.setColor(withAlpha(0xFFFFFFFF, active ? 0.42f : 0.24f));
         canvas.drawRoundRect(rect, radius, radius, blockStrokePaint);
 
         if (showPattern) {
-            // Internal Patterns to distinguish "colors"
-            int patternColor;
-            if (themeMode == 4) {
-                patternColor = 0xFF9CA67B; // Olive background for Brick Game
-            } else if (themeMode == 2) {
-                patternColor = 0xFF306230; // Dark green for DMG
-            } else {
-                patternColor = 0xFFFFFFFF; // White for Color, Electro, Mono
-            }
-            
-            blockStrokePaint.setColor(patternColor);
+            blockStrokePaint.setColor(0xFFFFFFFF);
             blockStrokePaint.setStrokeWidth(dp(2.2f));
             float cx = rect.centerX();
             float cy = rect.centerY();
@@ -2064,16 +2101,19 @@ public class GameView extends View {
     }
 
     private void drawGameTile(Canvas canvas, RectF rect, String title, int type, boolean selected) {
-        int fillColor = selected ? 0xEE143456 : 0x88143456;
-        int rimColor = selected ? 0xFF4ECFFF : 0x444ECFFF;
-        drawGlassCard(canvas, rect, fillColor, rimColor);
-        
-        if (selected) {
-            blockStrokePaint.setColor(0xFF4ECFFF);
-            blockStrokePaint.setStrokeWidth(dp(2));
-            canvas.drawRoundRect(rect, dp(22), dp(22), blockStrokePaint);
-            blockStrokePaint.setStrokeWidth(dp(1.3f));
-        }
+        Paint fillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        fillPaint.setStyle(Paint.Style.FILL);
+        int startColor = withAlpha(0xFF2A3780, 0.30f);
+        int endColor = withAlpha(0xFF33439D, 0.30f);
+        fillPaint.setShader(createAngledGradient(rect, new int[]{startColor, endColor}, null, -90f));
+        canvas.drawRoundRect(rect, dp(22), dp(22), fillPaint);
+
+        Paint strokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        strokePaint.setStyle(Paint.Style.STROKE);
+        strokePaint.setStrokeWidth(dp(2f));
+        strokePaint.setColor(selected ? 0xFF4ECFFF : 0xFF6188FF);
+        RectF strokeRect = new RectF(rect.left + dp(1), rect.top + dp(1), rect.right - dp(1), rect.bottom - dp(1));
+        canvas.drawRoundRect(strokeRect, dp(21), dp(21), strokePaint);
 
         float iconSize = dp(40);
         float iconX = rect.centerX();
@@ -2082,9 +2122,9 @@ public class GameView extends View {
         if (type == 0) { // Bricks Icon
             drawJellyCellAt(canvas, new RectF(iconX - iconSize/2, iconY - iconSize/2, iconX + iconSize/2, iconY + iconSize/2), 0, 0, 0, true, false, false);
         } else if (type == 1) { // Snake Icon
-            glowPaint.setColor(applyTheme(PIECE_COLORS[3])); // Green
+            glowPaint.setColor(PIECE_COLORS[3]); // Green
             canvas.drawCircle(iconX, iconY, iconSize/2, glowPaint);
-            glowPaint.setColor(applyTheme(Color.WHITE));
+            glowPaint.setColor(Color.WHITE);
             canvas.drawCircle(iconX - dp(8), iconY - dp(5), dp(4), glowPaint);
             canvas.drawCircle(iconX + dp(8), iconY - dp(5), dp(4), glowPaint);
         } else if (type == 2) { // Columns Icon
@@ -2095,7 +2135,7 @@ public class GameView extends View {
             float cs = bw / 4.5f;
             for (int i = 0; i < 4; i++) {
                 float cx = cr.left + dp(6) + i * (cs + dp(4));
-                glowPaint.setColor(applyTheme(PIECE_COLORS[i % PIECE_COLORS.length]));
+                glowPaint.setColor(PIECE_COLORS[i % PIECE_COLORS.length]);
                 canvas.drawCircle(cx + cs/2, iconY, cs/2.2f, glowPaint);
             }
         } else if (type == 3) { // Collapse Icon
@@ -2108,13 +2148,13 @@ public class GameView extends View {
             float pw = iconSize * 1.1f;
             float ph = iconSize * 0.22f;
             RectF padR = new RectF(iconX - pw/2, iconY + iconSize/4 - ph/2, iconX + pw/2, iconY + iconSize/4 + ph/2);
-            blockPaint.setColor(applyTheme(0xFF4ECFFF));
+            blockPaint.setColor(0xFF4ECFFF);
             canvas.drawRoundRect(padR, dp(3), dp(3), blockPaint);
             
             // Draw a tiny ball bouncing upwards
             float bx = iconX;
             float by = iconY - iconSize/4;
-            glowPaint.setColor(applyTheme(0xFFFFD35A));
+            glowPaint.setColor(0xFFFFD35A);
             canvas.drawCircle(bx, by, dp(5), glowPaint);
         }
 
@@ -2123,7 +2163,7 @@ public class GameView extends View {
     }
 
     private void drawSnakeHud(Canvas canvas) {
-        drawGlassCard(canvas, pauseButton, 0xCC143456, 0x6636D6FF);
+        drawButton(canvas, pauseButton, "", 0xCC143456, 0x6636D6FF);
         drawGlassCard(canvas, mainScoreRect, 0xCC143456, 0x6636D6FF);
         drawGlassCard(canvas, bestScoreRect, 0xCC143456, 0x6636D6FF);
 
@@ -2145,7 +2185,7 @@ public class GameView extends View {
         float scoreY = mainScoreRect.top + dp(65);
         if (snakeEngine.getCombo() > 1) {
             scoreY = mainScoreRect.top + dp(58);
-            hudLabelPaint.setColor(applyTheme(0xFFFFD35A)); // Gold
+            hudLabelPaint.setColor(0xFFFFD35A); // Gold
             canvas.drawText("x" + snakeEngine.getCombo() + " COMBO", mainScoreRect.centerX(), mainScoreRect.bottom - dp(12), hudLabelPaint);
             hudLabelPaint.setColor(Color.WHITE);
         }
@@ -2167,25 +2207,13 @@ public class GameView extends View {
 
     private void drawSnakeBoard(Canvas canvas, float time) {
         // Board Background
-        if (themeMode != 4) {
-            boardPaint.setShader(new LinearGradient(boardRect.left, boardRect.top, boardRect.left, boardRect.bottom,
-                    applyTheme(0xE8182940), applyTheme(0xF00A1526), Shader.TileMode.CLAMP));
-            canvas.drawRoundRect(boardRect, dp(26), dp(26), boardPaint);
-            boardPaint.setShader(null);
-        } else {
-            RectF outerBoard = new RectF(boardRect);
-            outerBoard.inset(-dp(5), -dp(5));
-            blockStrokePaint.setColor(0xFF000000);
-            blockStrokePaint.setStrokeWidth(dp(2.5f));
-            canvas.drawRoundRect(outerBoard, dp(30), dp(30), blockStrokePaint);
-            blockStrokePaint.setStrokeWidth(dp(1.3f));
-        }
+        drawPlayfieldBackgroundAndStroke(canvas, boardRect);
 
         float cellW = boardRect.width() / SnakeEngine.COLS;
         float cellH = boardRect.height() / SnakeEngine.ROWS;
 
         // Grid (Dots/Circles as in screenshot)
-        gridPaint.setColor(applyTheme(0x18FFFFFF));
+        gridPaint.setColor(0x18FFFFFF);
         gridPaint.setStyle(Paint.Style.STROKE);
         gridPaint.setStrokeWidth(dp(1));
         float dotRadius = Math.min(cellW, cellH) * 0.35f;
@@ -2203,16 +2231,12 @@ public class GameView extends View {
             float fx = boardRect.left + food.x * cellW + cellW / 2;
             float fy = boardRect.top + food.y * cellH + cellH / 2;
             float pulse = 1f + 0.15f * (float)Math.sin(time * 6f);
-            int foodColor = (themeMode == 2) ? Color.WHITE : applyTheme(0xFFFF2D55);
+            int foodColor = 0xFFFF2D55;
             glowPaint.setColor(foodColor); // Pink/Red or White for DMG
             canvas.drawCircle(fx, fy, (cellW / 2 - dp(2)) * pulse, glowPaint);
             
             // Subtle glow
-            if (themeMode == 2) {
-                glowPaint.setAlpha(180); // Stronger glow for DMG visibility
-            } else {
-                glowPaint.setAlpha(120);
-            }
+            glowPaint.setAlpha(120);
             canvas.drawCircle(fx, fy, (cellW / 2 + dp(4)) * pulse, glowPaint);
             glowPaint.setAlpha(255);
         }
@@ -2225,11 +2249,11 @@ public class GameView extends View {
             float cy = boardRect.top + p.y * cellH + cellH / 2;
             float radius = cellW / 2 - dp(1);
             
-            glowPaint.setColor(applyTheme(0xFF4CD964)); // Bright Green from screenshot
+            glowPaint.setColor(0xFF4CD964); // Bright Green from screenshot
             canvas.drawCircle(cx, cy, radius, glowPaint);
             
             if (i == 0) { // Head detail
-                glowPaint.setColor(applyTheme(0xFF248A3D));
+                glowPaint.setColor(0xFF248A3D);
                 canvas.drawCircle(cx, cy, radius * 0.4f, glowPaint);
             }
         }
@@ -2240,7 +2264,7 @@ public class GameView extends View {
         // Particles
         for (JellyParticle particle : particles) {
             float alpha = Math.max(0f, 1f - particle.age / particle.life);
-            sparkPaint.setColor(applyTheme(withAlpha(PIECE_COLORS[particle.colorIndex], alpha * 0.95f)));
+            sparkPaint.setColor(withAlpha(PIECE_COLORS[particle.colorIndex], alpha * 0.95f));
             canvas.drawCircle(particle.x, particle.y, particle.size, sparkPaint);
         }
     }
@@ -2263,7 +2287,7 @@ public class GameView extends View {
         float progress = (snakeEngine.getFoodEatenCount() % 3) / 3f;
         RectF fill = new RectF(bar.left, bar.top, bar.left + bar.width() * progress, bar.bottom);
         glowPaint.setShader(new LinearGradient(fill.left, fill.top, fill.right, fill.bottom,
-                                             applyTheme(0xFFAF52DE), applyTheme(0xFFFF2D55), Shader.TileMode.CLAMP)); // Purple to Pink
+                new int[]{0xFF009AFC, 0xFF1A33E0, 0xFF7912D3, 0xFFF21EE0}, null, Shader.TileMode.CLAMP));
         canvas.drawRoundRect(fill, barHeight/2, barHeight/2, glowPaint);
         glowPaint.setShader(null);
         
@@ -2291,11 +2315,11 @@ public class GameView extends View {
             boolean isFull = i < snakeEngine.getLives();
             
             if (isFull) {
-                glowPaint.setColor(applyTheme(Color.WHITE));
+                glowPaint.setColor(Color.WHITE);
                 glowPaint.setStyle(Paint.Style.FILL);
                 canvas.drawCircle(lx, ly, lifeSize / 2, glowPaint);
             } else {
-                glowPaint.setColor(applyTheme(Color.WHITE));
+                glowPaint.setColor(Color.WHITE);
                 glowPaint.setStyle(Paint.Style.STROKE);
                 glowPaint.setStrokeWidth(dp(1.2f));
                 canvas.drawCircle(lx, ly, lifeSize / 2 - dp(0.5f), glowPaint);
@@ -2354,7 +2378,7 @@ public class GameView extends View {
             canvas.drawText("SNAKE COLLAPSE", menuModalRect.centerX(), menuModalRect.top + dp(50), overlayTextPaint);
             
             // Score in Yellow
-            hudLabelPaint.setColor(applyTheme(0xFFFFD35A));
+            hudLabelPaint.setColor(0xFFFFD35A);
             hudLabelPaint.setTextSize(dp(22));
             canvas.drawText("SCORE: " + snakeEngine.getScore(), menuModalRect.centerX(), menuModalRect.top + dp(90), hudLabelPaint);
             hudLabelPaint.setColor(Color.WHITE);
@@ -2449,7 +2473,7 @@ public class GameView extends View {
     }
 
     private void drawColumnsHud(Canvas canvas) {
-        drawGlassCard(canvas, pauseButton, 0xCC143456, 0x6636D6FF);
+        drawButton(canvas, pauseButton, "", 0xCC143456, 0x6636D6FF);
         drawGlassCard(canvas, mainScoreRect, 0xCC143456, 0x6636D6FF);
         drawGlassCard(canvas, bestScoreRect, 0xCC143456, 0x6636D6FF);
         drawGlassCard(canvas, nextRect, 0xCC143456, 0x6636D6FF);
@@ -2477,7 +2501,7 @@ public class GameView extends View {
         
         if (columnsComboAnim > 0.05f) {
             String comboT = "COMBO x" + columnsEngine.getCombo();
-            hudLabelPaint.setColor(applyTheme(0xFFFFA35C)); // Orange/Gold
+            hudLabelPaint.setColor(0xFFFFA35C); // Orange/Gold
             hudLabelPaint.setAlpha((int)(255 * columnsComboAnim));
             canvas.drawText(comboT, mainScoreRect.centerX(), mainScoreRect.bottom - dp(10), hudLabelPaint);
             hudLabelPaint.setAlpha(255);
@@ -2518,28 +2542,16 @@ public class GameView extends View {
         // Bar background
         glowPaint.setShader(null);
         glowPaint.setStyle(Paint.Style.FILL);
-        glowPaint.setColor(themeMode == 4 || themeMode == 2 ? 0x22000000 : 0xAA000000); // Darker
+        glowPaint.setColor(0xAA000000); // Darker
         canvas.drawRoundRect(bar, barHeight/2, barHeight/2, glowPaint);
-        
-        // Stroke for retro themes
-        if (themeMode == 4 || themeMode == 2 || themeMode == 1) {
-            blockStrokePaint.setColor(applyTheme(0xFF000000));
-            blockStrokePaint.setStrokeWidth(dp(1.2f));
-            canvas.drawRoundRect(bar, barHeight/2, barHeight/2, blockStrokePaint);
-        }
 
         float progress = (columnsEngine.getTotalCleared() % 32) / 32f;
         RectF fill = new RectF(bar.left, bar.top, bar.left + bar.width() * progress, bar.bottom);
         
-        if (themeMode == 4 || themeMode == 2 || themeMode == 1) {
-            glowPaint.setColor(applyTheme(0xFF000000));
-            canvas.drawRoundRect(fill, barHeight/2, barHeight/2, glowPaint);
-        } else {
-            glowPaint.setShader(new LinearGradient(fill.left, fill.top, fill.right, fill.bottom, 
-                    0xFFF093FB, 0xFF43E97B, Shader.TileMode.CLAMP)); // Purple to Green
-            canvas.drawRoundRect(fill, barHeight/2, barHeight/2, glowPaint);
-            glowPaint.setShader(null);
-        }
+        glowPaint.setShader(new LinearGradient(fill.left, fill.top, fill.right, fill.bottom, 
+                new int[]{0xFF009AFC, 0xFF1A33E0, 0xFF7912D3, 0xFFF21EE0}, null, Shader.TileMode.CLAMP));
+        canvas.drawRoundRect(fill, barHeight/2, barHeight/2, glowPaint);
+        glowPaint.setShader(null);
 
         helperPaint.setTextSize(dp(11));
         helperPaint.setTextAlign(Paint.Align.CENTER);
@@ -2550,25 +2562,13 @@ public class GameView extends View {
 
     private void drawColumnsBoard(Canvas canvas, float time) {
         // Board Background
-        if (themeMode != 4) {
-            boardPaint.setShader(new LinearGradient(boardRect.left, boardRect.top, boardRect.left, boardRect.bottom,
-                    applyTheme(0xE8182940), applyTheme(0xF00A1526), Shader.TileMode.CLAMP));
-            canvas.drawRoundRect(boardRect, dp(26), dp(26), boardPaint);
-            boardPaint.setShader(null);
-        } else {
-            RectF outerBoard = new RectF(boardRect);
-            outerBoard.inset(-dp(5), -dp(5));
-            blockStrokePaint.setColor(0xFF000000);
-            blockStrokePaint.setStrokeWidth(dp(2.5f));
-            canvas.drawRoundRect(outerBoard, dp(30), dp(30), blockStrokePaint);
-            blockStrokePaint.setStrokeWidth(dp(1.3f));
-        }
+        drawPlayfieldBackgroundAndStroke(canvas, boardRect);
 
         float cellW = boardRect.width() / ColumnsEngine.COLS;
         float cellH = boardRect.height() / ColumnsEngine.ROWS;
 
         // Circle grid as requested
-        gridPaint.setColor(applyTheme(0x1AFFFFFF));
+        gridPaint.setColor(0x1AFFFFFF);
         gridPaint.setStyle(Paint.Style.STROKE);
         gridPaint.setStrokeWidth(dp(1f));
         float circleRadius = Math.min(cellW, cellH) * 0.35f;
@@ -2652,7 +2652,7 @@ public class GameView extends View {
             overlayTextPaint.setTextSize(dp(30));
             canvas.drawText("COLUMNS OVER", menuModalRect.centerX(), menuModalRect.top + dp(50), overlayTextPaint);
             
-            hudLabelPaint.setColor(applyTheme(0xFFFFD35A));
+            hudLabelPaint.setColor(0xFFFFD35A);
             hudLabelPaint.setTextSize(dp(22));
             hudLabelPaint.setTextAlign(Paint.Align.CENTER);
             canvas.drawText("SCORE: " + columnsEngine.getScore(), menuModalRect.centerX(), menuModalRect.top + dp(90), hudLabelPaint);
@@ -2686,7 +2686,7 @@ public class GameView extends View {
     }
 
     private void drawCollapseHud(Canvas canvas) {
-        drawGlassCard(canvas, pauseButton, 0xCC143456, 0x6636D6FF);
+        drawButton(canvas, pauseButton, "", 0xCC143456, 0x6636D6FF);
         drawGlassCard(canvas, bestScoreRect, 0xCC143456, 0x6636D6FF);
         drawGlassCard(canvas, mainScoreRect, 0xCC143456, 0x6636D6FF);
         drawGlassCard(canvas, nextRect, 0xC81C3045, 0x66FFE77B);
@@ -2725,7 +2725,7 @@ public class GameView extends View {
         drawAutoScaledText(canvas, String.valueOf(collapseEngine.getScore()), mainScoreRect.centerX(), scoreValueY, mainScoreRect.width() - dp(20), hudValuePaint, dp(36));
 
         if (collapseComboAnim > 0.05f) {
-            hudLabelPaint.setColor(applyTheme(0xFFFFD35A)); // Gold
+            hudLabelPaint.setColor(0xFFFFD35A); // Gold
             hudLabelPaint.setAlpha((int) (collapseComboAnim * 255));
             hudLabelPaint.setTextSize(dp(12));
             canvas.drawText("COMBO x" + collapseEngine.getComboSystem().getComboCount(), mainScoreRect.centerX(), mainScoreRect.bottom - dp(12), hudLabelPaint);
@@ -2766,18 +2766,8 @@ public class GameView extends View {
                 float x = startX + cell[0] * previewCell;
                 float y = startY + cell[1] * previewCell;
                 RectF cellR = new RectF(x, y, x + previewCell - dp(4), y + previewCell - dp(4));
-                if (themeMode == 4) {
-                    blockStrokePaint.setColor(0xFF000000);
-                    blockStrokePaint.setStrokeWidth(dp(1.8f));
-                    canvas.drawRoundRect(cellR, dp(6), dp(6), blockStrokePaint);
-                    RectF inner = new RectF(cellR.left + dp(3.5f), cellR.top + dp(3.5f), cellR.right - dp(3.5f), cellR.bottom - dp(3.5f));
-                    blockPaint.setColor(0xFF000000);
-                    blockPaint.setStyle(Paint.Style.FILL);
-                    canvas.drawRoundRect(inner, dp(2), dp(2), blockPaint);
-                } else {
-                    int cIndex = nextPiece.type;
-                    drawJellyCellAt(canvas, cellR, getCollapseColorIndex(cIndex), 0, 0, true, false, false);
-                }
+                int cIndex = nextPiece.type;
+                drawJellyCellAt(canvas, cellR, getCollapseColorIndex(cIndex), 0, 0, true, false, false);
             }
         }
 
@@ -2793,43 +2783,27 @@ public class GameView extends View {
         float progress = collapseEngine.getRisingRowProgress();
         RectF fill = new RectF(bar.left, bar.top, bar.left + bar.width() * progress, bar.bottom);
 
-        if (themeMode == 4) {
-            // High-Contrast Retro LCD styling
-            // 1. Draw solid black outline border
-            blockStrokePaint.setColor(0xFF000000);
-            blockStrokePaint.setStrokeWidth(dp(1.5f));
-            blockStrokePaint.setStyle(Paint.Style.STROKE);
-            canvas.drawRoundRect(bar, barHeight/2, barHeight/2, blockStrokePaint);
-            
-            // 2. Draw solid black fill block
-            if (progress > 0.02f) {
-                blockPaint.setColor(0xFF000000);
-                blockPaint.setStyle(Paint.Style.FILL);
-                canvas.drawRoundRect(fill, barHeight/2, barHeight/2, blockPaint);
-            }
-        } else {
-            // High-Contrast neon glowing warning bar
-            // 1. Dark track background
-            overlayPaint.setColor(0x33000000); 
-            overlayPaint.setStyle(Paint.Style.FILL);
-            canvas.drawRoundRect(bar, barHeight/2, barHeight/2, overlayPaint);
-            
-            // 2. Crisp bright white-gray border to pop out of the dark panel
-            overlayPaint.setColor(0x55FFFFFF); 
-            overlayPaint.setStyle(Paint.Style.STROKE);
-            overlayPaint.setStrokeWidth(dp(1f));
-            canvas.drawRoundRect(bar, barHeight/2, barHeight/2, overlayPaint);
-            overlayPaint.setStyle(Paint.Style.FILL); // restore
+        // High-Contrast neon glowing warning bar
+        // 1. Dark track background
+        overlayPaint.setColor(0x33000000); 
+        overlayPaint.setStyle(Paint.Style.FILL);
+        canvas.drawRoundRect(bar, barHeight/2, barHeight/2, overlayPaint);
+        
+        // 2. Crisp bright white-gray border to pop out of the dark panel
+        overlayPaint.setColor(0x55FFFFFF); 
+        overlayPaint.setStyle(Paint.Style.STROKE);
+        overlayPaint.setStrokeWidth(dp(1f));
+        canvas.drawRoundRect(bar, barHeight/2, barHeight/2, overlayPaint);
+        overlayPaint.setStyle(Paint.Style.FILL); // restore
 
-            // 3. Horizontal opaque gradient fill from Yellow (#FFCC3B) to Red (#FF3B60)
-            if (progress > 0.01f) {
-                glowPaint.setStyle(Paint.Style.FILL);
-                glowPaint.setAlpha(255);
-                glowPaint.setShader(new LinearGradient(fill.left, fill.top, fill.right, fill.top,
-                                                     0xFFFFCC3B, 0xFFFF3B60, Shader.TileMode.CLAMP)); // Horizontal, 100% opaque gradient
-                canvas.drawRoundRect(fill, barHeight/2, barHeight/2, glowPaint);
-                glowPaint.setShader(null);
-            }
+        // 3. 4-color gradient progress bar
+        if (progress > 0.01f) {
+            glowPaint.setStyle(Paint.Style.FILL);
+            glowPaint.setAlpha(255);
+            glowPaint.setShader(new LinearGradient(fill.left, fill.top, fill.right, fill.bottom,
+                    new int[]{0xFF009AFC, 0xFF1A33E0, 0xFF7912D3, 0xFFF21EE0}, null, Shader.TileMode.CLAMP));
+            canvas.drawRoundRect(fill, barHeight/2, barHeight/2, glowPaint);
+            glowPaint.setShader(null);
         }
         
         helperPaint.setTextSize(dp(11));
@@ -2846,29 +2820,14 @@ public class GameView extends View {
         canvas.drawRoundRect(boardGlowRect, dp(28), dp(28), glowPaint);
         glowPaint.setShader(null);
 
-        if (themeMode != 4) {
-            boardPaint.setShader(new LinearGradient(
-                    boardRect.left, boardRect.top, boardRect.left, boardRect.bottom,
-                    applyTheme(0xE8182940), applyTheme(0xF00A1526), Shader.TileMode.CLAMP
-            ));
-            canvas.drawRoundRect(boardRect, dp(26), dp(26), boardPaint);
-            boardPaint.setShader(null);
-        } else {
-            // Just a thin black border for the board in Brick Game mode
-            RectF outerBoard = new RectF(boardRect);
-            outerBoard.inset(-dp(5), -dp(5));
-            blockStrokePaint.setColor(0xFF000000);
-            blockStrokePaint.setStrokeWidth(dp(2.5f));
-            canvas.drawRoundRect(outerBoard, dp(30), dp(30), blockStrokePaint);
-            blockStrokePaint.setStrokeWidth(dp(1.3f));
-        }
+        drawPlayfieldBackgroundAndStroke(canvas, boardRect);
 
         float cell = boardRect.width() / CollapseEngine.COLS;
         float rowHeight = boardRect.height() / CollapseEngine.ROWS;
 
         // Draw light neon glass-grid cells
-        gridPaint.setColor(applyTheme(0x18FFFFFF));
-        blockStrokePaint.setColor(applyTheme(0x44FFFFFF));
+        gridPaint.setColor(0x18FFFFFF);
+        blockStrokePaint.setColor(0x44FFFFFF);
         for (int row = 0; row < CollapseEngine.ROWS; row++) {
             for (int col = 0; col < CollapseEngine.COLS; col++) {
                 RectF rect = cellRect(col, row, cell, rowHeight);
@@ -2891,20 +2850,9 @@ public class GameView extends View {
             for (int col = 0; col < CollapseEngine.COLS; col++) {
                 int value = collapseEngine.getCell(row, col);
                 if (value != 0) {
-                    if (themeMode == 4) {
-                        RectF cellR = cellRect(col, row, cell, rowHeight);
-                        blockStrokePaint.setColor(0xFF000000);
-                        blockStrokePaint.setStrokeWidth(dp(1.8f));
-                        canvas.drawRoundRect(cellR, dp(6), dp(6), blockStrokePaint);
-                        RectF inner = new RectF(cellR.left + dp(3.5f), cellR.top + dp(3.5f), cellR.right - dp(3.5f), cellR.bottom - dp(3.5f));
-                        blockPaint.setColor(0xFF000000);
-                        blockPaint.setStyle(Paint.Style.FILL);
-                        canvas.drawRoundRect(inner, dp(2), dp(2), blockPaint);
-                    } else {
-                        drawJellyCell(canvas, col, row, getCollapseColorIndex(value - 1), cell, rowHeight,
-                                0.05f * (float) Math.sin(time * 2.2f + row * 0.4f + col * 0.7f),
-                                0.08f * (float) Math.cos(time * 2.8f + col * 0.3f), false, false);
-                    }
+                    drawJellyCell(canvas, col, row, getCollapseColorIndex(value - 1), cell, rowHeight,
+                            0.05f * (float) Math.sin(time * 2.2f + row * 0.4f + col * 0.7f),
+                            0.08f * (float) Math.cos(time * 2.8f + col * 0.3f), false, false);
                 }
             }
         }
@@ -2916,20 +2864,9 @@ public class GameView extends View {
             for (int i = 0; i < activeCells.size(); i++) {
                 int[] cellPos = activeCells.get(i);
                 if (cellPos[1] >= 0) {
-                    if (themeMode == 4) {
-                        RectF cellR = cellRect(cellPos[0], cellPos[1], cell, rowHeight);
-                        blockStrokePaint.setColor(0xFF000000);
-                        blockStrokePaint.setStrokeWidth(dp(1.8f));
-                        canvas.drawRoundRect(cellR, dp(6), dp(6), blockStrokePaint);
-                        RectF inner = new RectF(cellR.left + dp(3.5f), cellR.top + dp(3.5f), cellR.right - dp(3.5f), cellR.bottom - dp(3.5f));
-                        blockPaint.setColor(0xFF000000);
-                        blockPaint.setStyle(Paint.Style.FILL);
-                        canvas.drawRoundRect(inner, dp(2), dp(2), blockPaint);
-                    } else {
-                        float jelly = 0.14f * (float) Math.sin(time * 7f + i * 1.1f + collapseEngine.getProgressToFall() * 5f);
-                        float sway = 0.16f * (float) Math.cos(time * 4.3f + i * 0.8f);
-                        drawJellyCell(canvas, cellPos[0], cellPos[1], getCollapseColorIndex(active.type), cell, rowHeight, jelly, sway, true, false);
-                    }
+                    float jelly = 0.14f * (float) Math.sin(time * 7f + i * 1.1f + collapseEngine.getProgressToFall() * 5f);
+                    float sway = 0.16f * (float) Math.cos(time * 4.3f + i * 0.8f);
+                    drawJellyCell(canvas, cellPos[0], cellPos[1], getCollapseColorIndex(active.type), cell, rowHeight, jelly, sway, true, false);
                 }
             }
         }
@@ -2974,7 +2911,7 @@ public class GameView extends View {
             canvas.drawText("COLLAPSE OVER", menuModalRect.centerX(), menuModalRect.top + dp(50), overlayTextPaint);
             
             // Score in Yellow
-            hudLabelPaint.setColor(applyTheme(0xFFFFD35A));
+            hudLabelPaint.setColor(0xFFFFD35A);
             hudLabelPaint.setTextSize(dp(22));
             canvas.drawText("SCORE: " + collapseEngine.getScore(), menuModalRect.centerX(), menuModalRect.top + dp(90), hudLabelPaint);
             hudLabelPaint.setColor(Color.WHITE);
@@ -2993,7 +2930,7 @@ public class GameView extends View {
     }
 
     private void drawBreakerHud(Canvas canvas) {
-        drawGlassCard(canvas, pauseButton, 0xCC143456, 0x6636D6FF);
+        drawButton(canvas, pauseButton, "", 0xCC143456, 0x6636D6FF);
         drawGlassCard(canvas, bestScoreRect, 0xCC143456, 0x6636D6FF);
         drawGlassCard(canvas, mainScoreRect, 0xCC143456, 0x6636D6FF);
         drawGlassCard(canvas, nextRect, 0xC81C3045, 0x66FFE77B);
@@ -3032,7 +2969,7 @@ public class GameView extends View {
 
         // Combo display
         if (breakerEngine.getComboDisplayTimer() > 0.05f) {
-            hudLabelPaint.setColor(applyTheme(0xFFFFD35A)); // Gold
+            hudLabelPaint.setColor(0xFFFFD35A); // Gold
             hudLabelPaint.setAlpha((int) (breakerEngine.getComboDisplayTimer() / 1.6f * 255));
             hudLabelPaint.setTextSize(dp(12));
             canvas.drawText("COMBO x" + breakerEngine.getComboCount(), mainScoreRect.centerX(), mainScoreRect.bottom - dp(12), hudLabelPaint);
@@ -3052,13 +2989,13 @@ public class GameView extends View {
         for (int i = 0; i < 3; i++) {
             float lx = startX + i * spacing;
             if (i < lives) {
-                hudLabelPaint.setColor(applyTheme(0xFFFF4E7E));
+                hudLabelPaint.setColor(0xFFFF4E7E);
                 hudLabelPaint.setStyle(Paint.Style.FILL);
                 canvas.drawCircle(lx, centerY, lifeRadius, hudLabelPaint);
                 hudLabelPaint.setColor(Color.WHITE);
                 canvas.drawCircle(lx - lifeRadius*0.3f, centerY - lifeRadius*0.3f, lifeRadius*0.25f, hudLabelPaint);
             } else {
-                hudLabelPaint.setColor(applyTheme(0x44FFFFFF));
+                hudLabelPaint.setColor(0x44FFFFFF);
                 hudLabelPaint.setStyle(Paint.Style.STROKE);
                 hudLabelPaint.setStrokeWidth(dp(1.5f));
                 canvas.drawCircle(lx, centerY, lifeRadius, hudLabelPaint);
@@ -3079,36 +3016,23 @@ public class GameView extends View {
         float progress = breakerEngine.getFallingRowProgress();
         RectF fill = new RectF(bar.left, bar.top, bar.left + bar.width() * progress, bar.bottom);
 
-        if (themeMode == 4) {
-            blockStrokePaint.setColor(0xFF000000);
-            blockStrokePaint.setStrokeWidth(dp(1.5f));
-            blockStrokePaint.setStyle(Paint.Style.STROKE);
-            canvas.drawRoundRect(bar, barHeight/2, barHeight/2, blockStrokePaint);
-            
-            if (progress > 0.02f) {
-                blockPaint.setColor(0xFF000000);
-                blockPaint.setStyle(Paint.Style.FILL);
-                canvas.drawRoundRect(fill, barHeight/2, barHeight/2, blockPaint);
-            }
-        } else {
-            overlayPaint.setColor(0x33000000); 
-            overlayPaint.setStyle(Paint.Style.FILL);
-            canvas.drawRoundRect(bar, barHeight/2, barHeight/2, overlayPaint);
-            
-            overlayPaint.setColor(0x55FFFFFF); 
-            overlayPaint.setStyle(Paint.Style.STROKE);
-            overlayPaint.setStrokeWidth(dp(1f));
-            canvas.drawRoundRect(bar, barHeight/2, barHeight/2, overlayPaint);
-            overlayPaint.setStyle(Paint.Style.FILL); // restore
+        overlayPaint.setColor(0x33000000); 
+        overlayPaint.setStyle(Paint.Style.FILL);
+        canvas.drawRoundRect(bar, barHeight/2, barHeight/2, overlayPaint);
+        
+        overlayPaint.setColor(0x55FFFFFF); 
+        overlayPaint.setStyle(Paint.Style.STROKE);
+        overlayPaint.setStrokeWidth(dp(1f));
+        canvas.drawRoundRect(bar, barHeight/2, barHeight/2, overlayPaint);
+        overlayPaint.setStyle(Paint.Style.FILL); // restore
 
-            if (progress > 0.01f) {
-                glowPaint.setStyle(Paint.Style.FILL);
-                glowPaint.setAlpha(255);
-                glowPaint.setShader(new LinearGradient(fill.left, fill.top, fill.right, fill.top,
-                                                     0xFF4ECFFF, 0xFFF47BF5, Shader.TileMode.CLAMP));
-                canvas.drawRoundRect(fill, barHeight/2, barHeight/2, glowPaint);
-                glowPaint.setShader(null);
-            }
+        if (progress > 0.01f) {
+            glowPaint.setStyle(Paint.Style.FILL);
+            glowPaint.setAlpha(255);
+            glowPaint.setShader(new LinearGradient(fill.left, fill.top, fill.right, fill.bottom,
+                    new int[]{0xFF009AFC, 0xFF1A33E0, 0xFF7912D3, 0xFFF21EE0}, null, Shader.TileMode.CLAMP));
+            canvas.drawRoundRect(fill, barHeight/2, barHeight/2, glowPaint);
+            glowPaint.setShader(null);
         }
         
         helperPaint.setTextSize(dp(11));
@@ -3125,27 +3049,13 @@ public class GameView extends View {
         canvas.drawRoundRect(boardGlowRect, dp(28), dp(28), glowPaint);
         glowPaint.setShader(null);
 
-        if (themeMode != 4) {
-            boardPaint.setShader(new LinearGradient(
-                    boardRect.left, boardRect.top, boardRect.left, boardRect.bottom,
-                    applyTheme(0xE8182940), applyTheme(0xF00A1526), Shader.TileMode.CLAMP
-            ));
-            canvas.drawRoundRect(boardRect, dp(26), dp(26), boardPaint);
-            boardPaint.setShader(null);
-        } else {
-            RectF outerBoard = new RectF(boardRect);
-            outerBoard.inset(-dp(5), -dp(5));
-            blockStrokePaint.setColor(0xFF000000);
-            blockStrokePaint.setStrokeWidth(dp(2.5f));
-            canvas.drawRoundRect(outerBoard, dp(30), dp(30), blockStrokePaint);
-            blockStrokePaint.setStrokeWidth(dp(1.3f));
-        }
+        drawPlayfieldBackgroundAndStroke(canvas, boardRect);
 
         float cell = boardRect.width() / BreakerEngine.COLS;
         float rowHeight = boardRect.height() / BreakerEngine.ROWS;
 
         // Draw light neon grid cells
-        gridPaint.setColor(applyTheme(0x12FFFFFF));
+        gridPaint.setColor(0x12FFFFFF);
         for (int row = 0; row < BreakerEngine.ROWS; row++) {
             for (int col = 0; col < BreakerEngine.COLS; col++) {
                 RectF rect = cellRect(col, row, cell, rowHeight);
@@ -3155,21 +3065,21 @@ public class GameView extends View {
 
         // Draw pulsing Danger Zone background overlay
         float pulse = (float) Math.sin(time * 6.0f) * 0.5f + 0.5f;
-        int dangerColor = withAlpha(applyTheme(0xFFFF3B30), (int) (20 + 25 * pulse));
+        int dangerColor = withAlpha(0xFFFF3B30, (int) (20 + 25 * pulse));
         overlayPaint.setColor(dangerColor);
         overlayPaint.setStyle(Paint.Style.FILL);
         RectF dangerZoneRect = new RectF(boardRect.left, boardRect.top + BreakerEngine.DANGER_ZONE_START_ROW * rowHeight, boardRect.right, boardRect.bottom);
         canvas.drawRoundRect(dangerZoneRect, dp(12), dp(12), overlayPaint);
 
         // Danger Zone line
-        overlayPaint.setColor(applyTheme(0xFFFF3B30));
+        overlayPaint.setColor(0xFFFF3B30);
         overlayPaint.setStyle(Paint.Style.STROKE);
         overlayPaint.setStrokeWidth(dp(2.0f));
         canvas.drawLine(boardRect.left, boardRect.top + BreakerEngine.DANGER_ZONE_START_ROW * rowHeight, boardRect.right, boardRect.top + BreakerEngine.DANGER_ZONE_START_ROW * rowHeight, overlayPaint);
         overlayPaint.setStyle(Paint.Style.FILL); // restore
 
         // Danger Zone text
-        helperPaint.setColor(applyTheme(0xFFFF3B30));
+        helperPaint.setColor(0xFFFF3B30);
         helperPaint.setAlpha((int) (40 + 30 * pulse));
         helperPaint.setTextSize(dp(10));
         helperPaint.setTextAlign(Paint.Align.CENTER);
@@ -3184,116 +3094,71 @@ public class GameView extends View {
                 if (value == 0) continue;
 
                 if (value >= 1 && value <= 7) { // Standard Brick
-                    if (themeMode == 4) {
-                        RectF cellR = cellRect(col, row, cell, rowHeight);
-                        blockStrokePaint.setColor(0xFF000000);
-                        blockStrokePaint.setStrokeWidth(dp(1.8f));
-                        canvas.drawRoundRect(cellR, dp(6), dp(6), blockStrokePaint);
-                        RectF inner = new RectF(cellR.left + dp(3.5f), cellR.top + dp(3.5f), cellR.right - dp(3.5f), cellR.bottom - dp(3.5f));
-                        blockPaint.setColor(0xFF000000);
-                        blockPaint.setStyle(Paint.Style.FILL);
-                        canvas.drawRoundRect(inner, dp(2), dp(2), blockPaint);
-                    } else {
-                        drawJellyCell(canvas, col, row, value - 1, cell, rowHeight,
-                                0.05f * (float) Math.sin(time * 2.2f + row * 0.4f + col * 0.7f),
-                                0.08f * (float) Math.cos(time * 2.8f + col * 0.3f), false, false);
-                    }
+                    drawJellyCell(canvas, col, row, value - 1, cell, rowHeight,
+                            0.05f * (float) Math.sin(time * 2.2f + row * 0.4f + col * 0.7f),
+                            0.08f * (float) Math.cos(time * 2.8f + col * 0.3f), false, false);
                 } else if (value == 8) { // Durable Brick
                     int hp = breakerEngine.getBrickHP(row, col);
                     RectF cellR = cellRect(col, row, cell, rowHeight);
-                    if (themeMode == 4) {
-                        blockStrokePaint.setColor(0xFF000000);
-                        blockStrokePaint.setStrokeWidth(dp(1.8f));
-                        canvas.drawRoundRect(cellR, dp(6), dp(6), blockStrokePaint);
-                        RectF inner = new RectF(cellR.left + dp(3.5f), cellR.top + dp(3.5f), cellR.right - dp(3.5f), cellR.bottom - dp(3.5f));
-                        blockPaint.setColor(0xFF000000);
-                        blockPaint.setStyle(Paint.Style.FILL);
-                        canvas.drawRoundRect(inner, dp(2), dp(2), blockPaint);
-                        if (hp <= 2) {
-                            canvas.drawLine(cellR.left + dp(3), cellR.top + dp(3), cellR.right - dp(3), cellR.bottom - dp(3), blockStrokePaint);
-                        }
-                    } else {
-                        blockPaint.setShader(new LinearGradient(cellR.left, cellR.top, cellR.right, cellR.bottom,
-                                             0xFFBDC3C7, 0xFF2C3E50, Shader.TileMode.CLAMP));
-                        canvas.drawRoundRect(cellR, dp(6), dp(6), blockPaint);
-                        blockPaint.setShader(null);
-                        
-                        blockStrokePaint.setColor(0x88FFFFFF);
-                        blockStrokePaint.setStrokeWidth(dp(1.0f));
+                    blockPaint.setShader(new LinearGradient(cellR.left, cellR.top, cellR.right, cellR.bottom,
+                                         0xFFBDC3C7, 0xFF2C3E50, Shader.TileMode.CLAMP));
+                    canvas.drawRoundRect(cellR, dp(6), dp(6), blockPaint);
+                    blockPaint.setShader(null);
+                    
+                    blockStrokePaint.setColor(0x88FFFFFF);
+                    blockStrokePaint.setStrokeWidth(dp(1.0f));
+                    blockStrokePaint.setStyle(Paint.Style.STROKE);
+                    canvas.drawRoundRect(cellR, dp(6), dp(6), blockStrokePaint);
+                    blockStrokePaint.setStyle(Paint.Style.FILL);
+                    
+                    if (hp <= 2) {
+                        blockStrokePaint.setColor(0xCC000000);
+                        blockStrokePaint.setStrokeWidth(dp(1.5f));
                         blockStrokePaint.setStyle(Paint.Style.STROKE);
-                        canvas.drawRoundRect(cellR, dp(6), dp(6), blockStrokePaint);
-                        blockStrokePaint.setStyle(Paint.Style.FILL);
-                        
-                        if (hp <= 2) {
-                            blockStrokePaint.setColor(0xCC000000);
-                            blockStrokePaint.setStrokeWidth(dp(1.5f));
-                            blockStrokePaint.setStyle(Paint.Style.STROKE);
-                            canvas.drawLine(cellR.left + cellR.width()*0.2f, cellR.top + cellR.height()*0.3f, 
-                                            cellR.left + cellR.width()*0.8f, cellR.top + cellR.height()*0.7f, blockStrokePaint);
-                            if (hp == 1) {
-                                canvas.drawLine(cellR.left + cellR.width()*0.7f, cellR.top + cellR.height()*0.2f, 
-                                                cellR.left + cellR.width()*0.3f, cellR.top + cellR.height()*0.8f, blockStrokePaint);
-                            }
-                            blockStrokePaint.setStyle(Paint.Style.FILL);
+                        canvas.drawLine(cellR.left + cellR.width()*0.2f, cellR.top + cellR.height()*0.3f, 
+                                        cellR.left + cellR.width()*0.8f, cellR.top + cellR.height()*0.7f, blockStrokePaint);
+                        if (hp == 1) {
+                            canvas.drawLine(cellR.left + cellR.width()*0.7f, cellR.top + cellR.height()*0.2f, 
+                                            cellR.left + cellR.width()*0.3f, cellR.top + cellR.height()*0.8f, blockStrokePaint);
                         }
+                        blockStrokePaint.setStyle(Paint.Style.FILL);
                     }
                 } else if (value == 9) { // PLUS Block
                     RectF cellR = cellRect(col, row, cell, rowHeight);
-                    if (themeMode == 4) {
-                        blockStrokePaint.setColor(0xFF000000);
-                        blockStrokePaint.setStrokeWidth(dp(1.8f));
-                        canvas.drawRoundRect(cellR, dp(6), dp(6), blockStrokePaint);
-                        float cx = cellR.centerX();
-                        float cy = cellR.centerY();
-                        float sz = cellR.width() * 0.25f;
-                        canvas.drawLine(cx - sz, cy, cx + sz, cy, blockStrokePaint);
-                        canvas.drawLine(cx, cy - sz, cx, cy + sz, blockStrokePaint);
-                    } else {
-                        blockPaint.setShader(new LinearGradient(cellR.left, cellR.top, cellR.right, cellR.bottom,
-                                             0xFFFFE77B, 0xFF4ECFFF, Shader.TileMode.CLAMP));
-                        canvas.drawRoundRect(cellR, dp(8), dp(8), blockPaint);
-                        blockPaint.setShader(null);
-                        
-                        glowPaint.setStyle(Paint.Style.STROKE);
-                        glowPaint.setColor(0x884ECFFF);
-                        glowPaint.setStrokeWidth(dp(2.0f + 1.5f * pulse));
-                        canvas.drawRoundRect(cellR, dp(8), dp(8), glowPaint);
-                        glowPaint.setStyle(Paint.Style.FILL);
-                        
-                        overlayTextPaint.setColor(0xFF0A1526);
-                        overlayTextPaint.setTextSize(cellR.height() * 0.8f);
-                        overlayTextPaint.setTextAlign(Paint.Align.CENTER);
-                        canvas.drawText("+", cellR.centerX(), cellR.centerY() - (overlayTextPaint.descent() + overlayTextPaint.ascent()) / 2, overlayTextPaint);
-                        overlayTextPaint.setColor(Color.WHITE);
-                    }
+                    blockPaint.setShader(new LinearGradient(cellR.left, cellR.top, cellR.right, cellR.bottom,
+                                         0xFFFFE77B, 0xFF4ECFFF, Shader.TileMode.CLAMP));
+                    canvas.drawRoundRect(cellR, dp(8), dp(8), blockPaint);
+                    blockPaint.setShader(null);
+                    
+                    glowPaint.setStyle(Paint.Style.STROKE);
+                    glowPaint.setColor(0x884ECFFF);
+                    glowPaint.setStrokeWidth(dp(2.0f + 1.5f * pulse));
+                    canvas.drawRoundRect(cellR, dp(8), dp(8), glowPaint);
+                    glowPaint.setStyle(Paint.Style.FILL);
+                    
+                    overlayTextPaint.setColor(0xFF0A1526);
+                    overlayTextPaint.setTextSize(cellR.height() * 0.8f);
+                    overlayTextPaint.setTextAlign(Paint.Align.CENTER);
+                    canvas.drawText("+", cellR.centerX(), cellR.centerY() - (overlayTextPaint.descent() + overlayTextPaint.ascent()) / 2, overlayTextPaint);
+                    overlayTextPaint.setColor(Color.WHITE);
                 } else if (value == 10) { // MINUS Block
                     RectF cellR = cellRect(col, row, cell, rowHeight);
-                    if (themeMode == 4) {
-                        blockStrokePaint.setColor(0xFF000000);
-                        blockStrokePaint.setStrokeWidth(dp(1.8f));
-                        canvas.drawRoundRect(cellR, dp(6), dp(6), blockStrokePaint);
-                        float cx = cellR.centerX();
-                        float cy = cellR.centerY();
-                        float sz = cellR.width() * 0.25f;
-                        canvas.drawLine(cx - sz, cy, cx + sz, cy, blockStrokePaint);
-                    } else {
-                        blockPaint.setShader(new LinearGradient(cellR.left, cellR.top, cellR.right, cellR.bottom,
-                                             0xFFFF4E50, 0xFFF9D423, Shader.TileMode.CLAMP));
-                        canvas.drawRoundRect(cellR, dp(8), dp(8), blockPaint);
-                        blockPaint.setShader(null);
-                        
-                        glowPaint.setStyle(Paint.Style.STROKE);
-                        glowPaint.setColor(0x88FF4E50);
-                        glowPaint.setStrokeWidth(dp(2.0f + 1.5f * pulse));
-                        canvas.drawRoundRect(cellR, dp(8), dp(8), glowPaint);
-                        glowPaint.setStyle(Paint.Style.FILL);
-                        
-                        overlayTextPaint.setColor(0xFF0A1526);
-                        overlayTextPaint.setTextSize(cellR.height() * 0.8f);
-                        overlayTextPaint.setTextAlign(Paint.Align.CENTER);
-                        canvas.drawText("-", cellR.centerX(), cellR.centerY() - (overlayTextPaint.descent() + overlayTextPaint.ascent()) / 2, overlayTextPaint);
-                        overlayTextPaint.setColor(Color.WHITE);
-                    }
+                    blockPaint.setShader(new LinearGradient(cellR.left, cellR.top, cellR.right, cellR.bottom,
+                                         0xFFFF4E50, 0xFFF9D423, Shader.TileMode.CLAMP));
+                    canvas.drawRoundRect(cellR, dp(8), dp(8), blockPaint);
+                    blockPaint.setShader(null);
+                    
+                    glowPaint.setStyle(Paint.Style.STROKE);
+                    glowPaint.setColor(0x88FF4E50);
+                    glowPaint.setStrokeWidth(dp(2.0f + 1.5f * pulse));
+                    canvas.drawRoundRect(cellR, dp(8), dp(8), glowPaint);
+                    glowPaint.setStyle(Paint.Style.FILL);
+                    
+                    overlayTextPaint.setColor(0xFF0A1526);
+                    overlayTextPaint.setTextSize(cellR.height() * 0.8f);
+                    overlayTextPaint.setTextAlign(Paint.Align.CENTER);
+                    canvas.drawText("-", cellR.centerX(), cellR.centerY() - (overlayTextPaint.descent() + overlayTextPaint.ascent()) / 2, overlayTextPaint);
+                    overlayTextPaint.setColor(Color.WHITE);
                 }
             }
         }
@@ -3307,29 +3172,16 @@ public class GameView extends View {
         RectF paddleRect = new RectF(paddlePxX - paddlePxW/2f, paddlePxY - paddlePxH/2f,
                                      paddlePxX + paddlePxW/2f, paddlePxY + paddlePxH/2f);
 
-        if (themeMode == 4) {
-            blockStrokePaint.setColor(0xFF000000);
-            blockStrokePaint.setStrokeWidth(dp(2.5f));
-            blockStrokePaint.setStyle(Paint.Style.STROKE);
-            canvas.drawRoundRect(paddleRect, paddlePxH/2f, paddlePxH/2f, blockStrokePaint);
-            blockStrokePaint.setStyle(Paint.Style.FILL);
-            
-            blockPaint.setColor(0xFF000000);
-            RectF innerPaddle = new RectF(paddleRect);
-            innerPaddle.inset(dp(3), dp(3));
-            canvas.drawRoundRect(innerPaddle, innerPaddle.height()/2f, innerPaddle.height()/2f, blockPaint);
-        } else {
-            blockPaint.setShader(new LinearGradient(paddleRect.left, paddleRect.top, paddleRect.right, paddleRect.top,
-                                 0xFF4ECFFF, 0xFFF47BF5, Shader.TileMode.CLAMP));
-            canvas.drawRoundRect(paddleRect, paddlePxH/2f, paddlePxH/2f, blockPaint);
-            blockPaint.setShader(null);
+        blockPaint.setShader(new LinearGradient(paddleRect.left, paddleRect.top, paddleRect.right, paddleRect.top,
+                             0xFF4ECFFF, 0xFFF47BF5, Shader.TileMode.CLAMP));
+        canvas.drawRoundRect(paddleRect, paddlePxH/2f, paddlePxH/2f, blockPaint);
+        blockPaint.setShader(null);
 
-            blockStrokePaint.setColor(0xBBFFFFFF);
-            blockStrokePaint.setStrokeWidth(dp(1.2f));
-            blockStrokePaint.setStyle(Paint.Style.STROKE);
-            canvas.drawRoundRect(paddleRect, paddlePxH/2f, paddlePxH/2f, blockStrokePaint);
-            blockStrokePaint.setStyle(Paint.Style.FILL);
-        }
+        blockStrokePaint.setColor(0xBBFFFFFF);
+        blockStrokePaint.setStrokeWidth(dp(1.2f));
+        blockStrokePaint.setStyle(Paint.Style.STROKE);
+        canvas.drawRoundRect(paddleRect, paddlePxH/2f, paddlePxH/2f, blockStrokePaint);
+        blockStrokePaint.setStyle(Paint.Style.FILL);
 
         // Draw Balls (with trail and glow)
         float ballRadiusInGrid = 0.22f;
@@ -3343,36 +3195,23 @@ public class GameView extends View {
                 float ty = boardRect.top + (pos[1] / BreakerEngine.ROWS) * boardRect.height();
                 float alphaPct = 1f - (float) (t + 1) / (trail.size() + 1);
                 
-                if (themeMode == 4) {
-                    blockStrokePaint.setColor(0xFF000000);
-                    blockStrokePaint.setStrokeWidth(dp(1.0f));
-                    blockStrokePaint.setStyle(Paint.Style.STROKE);
-                    canvas.drawCircle(tx, ty, ballPxR * (0.4f + 0.6f * alphaPct), blockStrokePaint);
-                    blockStrokePaint.setStyle(Paint.Style.FILL);
-                } else {
-                    int trailColor = Color.HSVToColor((int) (alphaPct * 120), new float[]{ball.hueOffset % 360f, 0.8f, 0.95f});
-                    blockPaint.setColor(trailColor);
-                    canvas.drawCircle(tx, ty, ballPxR * (0.5f + 0.5f * alphaPct), blockPaint);
-                }
+                int trailColor = Color.HSVToColor((int) (alphaPct * 120), new float[]{ball.hueOffset % 360f, 0.8f, 0.95f});
+                blockPaint.setColor(trailColor);
+                canvas.drawCircle(tx, ty, ballPxR * (0.5f + 0.5f * alphaPct), blockPaint);
             }
 
             float bx = boardRect.left + (ball.x / BreakerEngine.COLS) * boardRect.width();
             float by = boardRect.top + (ball.y / BreakerEngine.ROWS) * boardRect.height();
             
-            if (themeMode == 4) {
-                blockPaint.setColor(0xFF000000);
-                canvas.drawCircle(bx, by, ballPxR, blockPaint);
-            } else {
-                int ballColor = Color.HSVToColor(255, new float[]{ball.hueOffset % 360f, 0.85f, 1.0f});
-                blockPaint.setColor(ballColor);
-                canvas.drawCircle(bx, by, ballPxR, blockPaint);
-                
-                glowPaint.setColor(withAlpha(ballColor, 100));
-                canvas.drawCircle(bx, by, ballPxR * 1.5f, glowPaint);
-                
-                blockPaint.setColor(Color.WHITE);
-                canvas.drawCircle(bx - ballPxR * 0.25f, by - ballPxR * 0.25f, ballPxR * 0.35f, blockPaint);
-            }
+            int ballColor = Color.HSVToColor(255, new float[]{ball.hueOffset % 360f, 0.85f, 1.0f});
+            blockPaint.setColor(ballColor);
+            canvas.drawCircle(bx, by, ballPxR, blockPaint);
+            
+            glowPaint.setColor(withAlpha(ballColor, 100));
+            canvas.drawCircle(bx, by, ballPxR * 1.5f, glowPaint);
+            
+            blockPaint.setColor(Color.WHITE);
+            canvas.drawCircle(bx - ballPxR * 0.25f, by - ballPxR * 0.25f, ballPxR * 0.35f, blockPaint);
         }
 
         // Draw Explosions
@@ -3384,20 +3223,12 @@ public class GameView extends View {
             float radius = cell * 2.2f * (0.3f + 0.7f * progress);
             int alpha = (int) ((1f - progress) * 220);
             
-            if (themeMode == 4) {
-                blockStrokePaint.setColor(0xFF000000);
-                blockStrokePaint.setStrokeWidth(dp(1.5f));
-                blockStrokePaint.setStyle(Paint.Style.STROKE);
-                canvas.drawCircle(ex, ey, radius, blockStrokePaint);
-                blockStrokePaint.setStyle(Paint.Style.FILL);
-            } else {
-                RadialGradient grad = new RadialGradient(ex, ey, radius,
-                        new int[]{withAlpha(0xFFFFE359, alpha), withAlpha(0xFFFF5E3A, alpha), 0x00000000},
-                        new float[]{0.0f, 0.6f, 1.0f}, Shader.TileMode.CLAMP);
-                glowPaint.setShader(grad);
-                canvas.drawCircle(ex, ey, radius, glowPaint);
-                glowPaint.setShader(null);
-            }
+            RadialGradient grad = new RadialGradient(ex, ey, radius,
+                    new int[]{withAlpha(0xFFFFE359, alpha), withAlpha(0xFFFF5E3A, alpha), 0x00000000},
+                    new float[]{0.0f, 0.6f, 1.0f}, Shader.TileMode.CLAMP);
+            glowPaint.setShader(grad);
+            canvas.drawCircle(ex, ey, radius, glowPaint);
+            glowPaint.setShader(null);
         }
     }
 
@@ -3433,7 +3264,7 @@ public class GameView extends View {
             overlayTextPaint.setTextSize(dp(30));
             canvas.drawText("BREAKER OVER", menuModalRect.centerX(), menuModalRect.top + dp(50), overlayTextPaint);
             
-            hudLabelPaint.setColor(applyTheme(0xFFFFD35A));
+            hudLabelPaint.setColor(0xFFFFD35A);
             hudLabelPaint.setTextSize(dp(22));
             canvas.drawText("SCORE: " + breakerEngine.getScore(), menuModalRect.centerX(), menuModalRect.top + dp(90), hudLabelPaint);
             hudLabelPaint.setColor(Color.WHITE);

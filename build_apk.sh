@@ -32,8 +32,7 @@ mkdir -p "$RES_DIR" "$GEN_DIR" "$CLS_DIR" "$DEX_DIR" "$APK_DIR"
 find "$APP_DIR/java" "$GEN_DIR" -name '*.java' > "$BUILD_DIR/sources.list"
 
 "$JAVA_HOME/bin/javac" \
-  -source 17 \
-  -target 17 \
+  --release 17 \
   -classpath "$PLATFORM" \
   -d "$CLS_DIR" \
   @"$BUILD_DIR/sources.list"
