@@ -112,6 +112,7 @@ public class GameView extends View {
     private final RectF snakeLevelBarRect = new RectF();
 
     private final Path blobPath = new Path();
+    private final Path playfieldClipPath = new Path();
     private final ArrayList<BackgroundOrb> orbs = new ArrayList<>();
     private final ArrayList<JellyParticle> particles = new ArrayList<>();
     private final ArrayList<FloatingShape> floatingShapes = new ArrayList<>();
@@ -846,6 +847,9 @@ public class GameView extends View {
 
         gridPaint.setStrokeWidth(dp(1));
         blockStrokePaint.setStrokeWidth(dp(1.3f));
+
+        playfieldClipPath.reset();
+        playfieldClipPath.addRoundRect(boardRect, dp(26), dp(26), Path.Direction.CW);
     }
 
     private void drawBackground(Canvas canvas, float time) {
@@ -968,6 +972,9 @@ public class GameView extends View {
 
         drawPlayfieldBackgroundAndStroke(canvas, boardRect);
 
+        canvas.save();
+        canvas.clipPath(playfieldClipPath);
+
         float cell = boardRect.width() / TetraEngine.COLS;
         float rowHeight = boardRect.height() / TetraEngine.ROWS;
 
@@ -1028,6 +1035,8 @@ public class GameView extends View {
             canvas.drawCircle(-particle.size * 0.22f, -particle.size * 0.22f, particle.size * 0.42f, sparkPaint);
             canvas.restore();
         }
+
+        canvas.restore();
     }
 
     private void drawOverlay(Canvas canvas) {
@@ -1313,8 +1322,8 @@ public class GameView extends View {
                 return;
             } else {
                 // Other HUD cards style
-                int startColor = withAlpha(0xFF2A3780, 0.30f);
-                int endColor = withAlpha(0xFF33439D, 0.30f);
+                int startColor = withAlpha(0xFF2A3780, 0.12f);
+                int endColor = withAlpha(0xFF33439D, 0.12f);
                 fillPaint.setShader(createAngledGradient(rect, new int[]{startColor, endColor}, null, -90f));
                 canvas.drawRoundRect(rect, dp(22), dp(22), fillPaint);
 
@@ -1377,11 +1386,13 @@ public class GameView extends View {
         Paint strokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         strokePaint.setStyle(Paint.Style.STROKE);
         strokePaint.setStrokeWidth(dp(2f));
+        boolean isGameplayControl = (rect == leftButton || rect == rotateButton || rect == rightButton || rect == dropButton);
+        float opacity = isGameplayControl ? 0.12f : 0.30f;
 
         if (label.equalsIgnoreCase("Start Game") || rect == pauseButton || rect == rotateButton) {
             // Fill: gradient from #502a80 to #3d339d, 30% opacity, angle -30 degrees
-            int startColor = withAlpha(0xFF502A80, 0.30f);
-            int endColor = withAlpha(0xFF3D339D, 0.30f);
+            int startColor = withAlpha(0xFF502A80, opacity);
+            int endColor = withAlpha(0xFF3D339D, opacity);
             btnPaint.setShader(createAngledGradient(rect, new int[]{startColor, endColor}, null, -30f));
             canvas.drawRoundRect(rect, dp(22), dp(22), btnPaint);
 
@@ -1393,8 +1404,8 @@ public class GameView extends View {
             canvas.drawRoundRect(strokeRect, dp(21), dp(21), strokePaint);
         } else {
             // All other UI buttons: gradient from #2a3780 and #33439d, 30% opacity, angle -90 degrees
-            int startColor = withAlpha(0xFF2A3780, 0.30f);
-            int endColor = withAlpha(0xFF33439D, 0.30f);
+            int startColor = withAlpha(0xFF2A3780, opacity);
+            int endColor = withAlpha(0xFF33439D, opacity);
             btnPaint.setShader(createAngledGradient(rect, new int[]{startColor, endColor}, null, -90f));
             canvas.drawRoundRect(rect, dp(22), dp(22), btnPaint);
 
@@ -2209,6 +2220,9 @@ public class GameView extends View {
         // Board Background
         drawPlayfieldBackgroundAndStroke(canvas, boardRect);
 
+        canvas.save();
+        canvas.clipPath(playfieldClipPath);
+
         float cellW = boardRect.width() / SnakeEngine.COLS;
         float cellH = boardRect.height() / SnakeEngine.ROWS;
 
@@ -2258,15 +2272,17 @@ public class GameView extends View {
             }
         }
 
-        // Level Bar (Right side)
-        drawSnakeLevelBar(canvas);
-        
         // Particles
         for (JellyParticle particle : particles) {
             float alpha = Math.max(0f, 1f - particle.age / particle.life);
             sparkPaint.setColor(withAlpha(PIECE_COLORS[particle.colorIndex], alpha * 0.95f));
             canvas.drawCircle(particle.x, particle.y, particle.size, sparkPaint);
         }
+
+        canvas.restore();
+
+        // Level Bar (Right side)
+        drawSnakeLevelBar(canvas);
     }
 
     private void drawSnakeLevelBar(Canvas canvas) {
@@ -2564,6 +2580,9 @@ public class GameView extends View {
         // Board Background
         drawPlayfieldBackgroundAndStroke(canvas, boardRect);
 
+        canvas.save();
+        canvas.clipPath(playfieldClipPath);
+
         float cellW = boardRect.width() / ColumnsEngine.COLS;
         float cellH = boardRect.height() / ColumnsEngine.ROWS;
 
@@ -2577,9 +2596,6 @@ public class GameView extends View {
                 canvas.drawCircle(boardRect.left + c * cellW + cellW/2, boardRect.top + r * cellH + cellH/2, circleRadius, gridPaint);
             }
         }
-
-        canvas.save();
-        canvas.clipRect(boardRect);
 
         ColumnsEngine.Piece[][] grid = columnsEngine.getGrid();
         for (int r = 0; r < ColumnsEngine.ROWS; r++) {
@@ -2822,6 +2838,9 @@ public class GameView extends View {
 
         drawPlayfieldBackgroundAndStroke(canvas, boardRect);
 
+        canvas.save();
+        canvas.clipPath(playfieldClipPath);
+
         float cell = boardRect.width() / CollapseEngine.COLS;
         float rowHeight = boardRect.height() / CollapseEngine.ROWS;
 
@@ -2870,6 +2889,8 @@ public class GameView extends View {
                 }
             }
         }
+
+        canvas.restore();
     }
 
     private void drawCollapseOverlay(Canvas canvas) {
@@ -3051,6 +3072,9 @@ public class GameView extends View {
 
         drawPlayfieldBackgroundAndStroke(canvas, boardRect);
 
+        canvas.save();
+        canvas.clipPath(playfieldClipPath);
+
         float cell = boardRect.width() / BreakerEngine.COLS;
         float rowHeight = boardRect.height() / BreakerEngine.ROWS;
 
@@ -3230,6 +3254,8 @@ public class GameView extends View {
             canvas.drawCircle(ex, ey, radius, glowPaint);
             glowPaint.setShader(null);
         }
+
+        canvas.restore();
     }
 
     private void drawBreakerOverlay(Canvas canvas) {
