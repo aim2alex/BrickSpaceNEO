@@ -34,13 +34,43 @@ import java.util.Random;
 
 public class GameView extends View {
     private static final int[] PIECE_COLORS = new int[]{
-            0xFF57C7FF,
-            0xFFFF8F52,
-            0xFFFFD35A,
-            0xFF92F07D,
-            0xFFF77AD9,
-            0xFF9D7BFF,
-            0xFFFF6C6C
+            0xFF35B8FF, // Cyan
+            0xFFFF8A1F, // Orange
+            0xFFFFC928, // Yellow
+            0xFF5DFF1F, // Green
+            0xFFFF3FB4, // Pink
+            0xFF9B4DFF, // Purple
+            0xFFFF4A57  // Red
+    };
+
+    private static final int[] HIGHLIGHT_COLORS = new int[]{
+            0xFF8FE7FF,
+            0xFFFFD36A,
+            0xFFFFF07A,
+            0xFFC8FF72,
+            0xFFFF9AE8,
+            0xFFD8A8FF,
+            0xFFFF9A9F
+    };
+
+    private static final int[] SHADOW_COLORS = new int[]{
+            0xFF0B4DFF,
+            0xFFD94A00,
+            0xFFE08A00,
+            0xFF1BAF00,
+            0xFFB10068,
+            0xFF4C00C7,
+            0xFFA8001E
+    };
+
+    private static final int[] GLOW_COLORS = new int[]{
+            0xFF00D9FF,
+            0xFFFF7A00,
+            0xFFFFD400,
+            0xFF39FF14,
+            0xFFFF4DFF,
+            0xFFB266FF,
+            0xFFFF3355
     };
 
     private static final int[] COSMIC_COLORS = new int[]{
@@ -1364,8 +1394,7 @@ public class GameView extends View {
             float x = startX + cell[0] * previewCell;
             float y = startY + cell[1] * previewCell;
             RectF rect = new RectF(x, y, x + previewCell - dp(4), y + previewCell - dp(4));
-            glowPaint.setColor(withAlpha(PIECE_COLORS[piece.type], 0.95f));
-            canvas.drawRoundRect(rect, dp(10), dp(10), glowPaint);
+            drawJellyCellAt(canvas, rect, piece.type, 0, 0, true, false, false);
         }
     }
 
@@ -1494,11 +1523,22 @@ public class GameView extends View {
 
     private void drawGhostCell(Canvas canvas, int col, int row, int colorIndex, float cell, float rowHeight) {
         RectF rect = cellRect(col, row, cell, rowHeight);
-        int baseColor = PIECE_COLORS[colorIndex % PIECE_COLORS.length];
-        glowPaint.setColor(withAlpha(baseColor, 0.16f));
-        canvas.drawRoundRect(rect, dp(12), dp(12), glowPaint);
-        blockStrokePaint.setColor(withAlpha(baseColor, 0.40f));
+        
+        // Fill: #7ED8FF with 26% opacity
+        Paint fillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        fillPaint.setStyle(Paint.Style.FILL);
+        fillPaint.setColor(withAlpha(0xFF7ED8FF, 0.26f));
+        canvas.drawRoundRect(rect, dp(12), dp(12), fillPaint);
+        
+        // Outline: #B7F0FF with 3dp stroke width
+        blockStrokePaint.setColor(0xFFB7F0FF);
+        blockStrokePaint.setStyle(Paint.Style.STROKE);
+        blockStrokePaint.setStrokeWidth(dp(3f));
         canvas.drawRoundRect(rect, dp(12), dp(12), blockStrokePaint);
+        
+        // Restore stroke defaults
+        blockStrokePaint.setStrokeWidth(dp(1.3f));
+        blockStrokePaint.setStyle(Paint.Style.FILL);
     }
 
     private void drawAutoScaledText(Canvas canvas, String text, float x, float y, float maxW, Paint paint, float baseSize) {
@@ -1530,32 +1570,66 @@ public class GameView extends View {
         float inflateY = dp(3.1f) * sway;
         RectF rect = new RectF(baseRect.left - inflateX, baseRect.top + inflateY, baseRect.right + inflateX, baseRect.bottom - inflateY);
         float radius = dp(active ? 15 : 13);
-        int baseColor = PIECE_COLORS[colorIndex % PIECE_COLORS.length];
+        
+        int idx = (colorIndex >= 0) ? (colorIndex % PIECE_COLORS.length) : 0;
+        int baseColor = PIECE_COLORS[idx];
+        int highlightColor = HIGHLIGHT_COLORS[idx];
+        int shadowColor = SHADOW_COLORS[idx];
+        int glowColor = GLOW_COLORS[idx];
 
         if (isGhost) {
-            blockStrokePaint.setColor(withAlpha(baseColor, 0.45f));
+            // Fill: #7ED8FF with 26% opacity
+            Paint fillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            fillPaint.setStyle(Paint.Style.FILL);
+            fillPaint.setColor(withAlpha(0xFF7ED8FF, 0.26f));
+            canvas.drawRoundRect(rect, radius, radius, fillPaint);
+            
+            // Outline: #B7F0FF with 3dp stroke width
+            blockStrokePaint.setColor(0xFFB7F0FF);
             blockStrokePaint.setStyle(Paint.Style.STROKE);
-            blockStrokePaint.setStrokeWidth(dp(2f));
+            blockStrokePaint.setStrokeWidth(dp(3f));
             canvas.drawRoundRect(rect, radius, radius, blockStrokePaint);
+            
+            // Restore stroke defaults
             blockStrokePaint.setStrokeWidth(dp(1.3f));
             blockStrokePaint.setStyle(Paint.Style.FILL); // Restore
             return;
         }
 
-        shadowPaint.setAlpha(active ? 120 : 70);
-        canvas.drawRoundRect(new RectF(rect.left, rect.top + dp(4), rect.right, rect.bottom + dp(4)), radius, radius, shadowPaint);
+        // 1. Soft bloom glow (outer glow)
+        glowPaint.setShader(null);
+        glowPaint.setColor(withAlpha(glowColor, active ? 0.38f : 0.20f));
+        canvas.drawRoundRect(new RectF(rect.left - dp(3.5f), rect.top - dp(3.5f), rect.right + dp(3.5f), rect.bottom + dp(3.5f)), radius + dp(2.5f), radius + dp(2.5f), glowPaint);
 
+        // 2. Base gradient fill (from highlight to shadow for high contrast vibrant look)
         blockPaint.setShader(new LinearGradient(rect.left, rect.top, rect.right, rect.bottom,
-                lighten(baseColor, 0.22f), darken(baseColor, 0.18f), Shader.TileMode.CLAMP));
+                highlightColor, shadowColor, Shader.TileMode.CLAMP));
         canvas.drawRoundRect(rect, radius, radius, blockPaint);
         blockPaint.setShader(null);
 
-        RectF sheenRect = new RectF(rect.left + dp(3), rect.top + dp(3), rect.right - dp(7), rect.top + rect.height() * 0.45f);
-        blockShadePaint.setColor(withAlpha(lighten(baseColor, 0.34f), active ? 0.42f : 0.28f));
-        canvas.drawRoundRect(sheenRect, radius, radius, blockShadePaint);
+        // 3. Specular top gloss highlight
+        Paint sheenPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        sheenPaint.setStyle(Paint.Style.FILL);
+        RectF sheenRect = new RectF(rect.left + dp(3.5f), rect.top + dp(3.5f), rect.right - dp(4.5f), rect.top + rect.height() * 0.42f);
+        float sheenRadius = radius - dp(2.5f);
+        int[] sheenColors = new int[]{withAlpha(0xFFFFFFFF, 0.65f), withAlpha(0xFFFFFFFF, 0.05f)};
+        sheenPaint.setShader(new LinearGradient(sheenRect.left, sheenRect.top, sheenRect.left, sheenRect.bottom, sheenColors, null, Shader.TileMode.CLAMP));
+        canvas.drawRoundRect(sheenRect, sheenRadius, sheenRadius, sheenPaint);
 
-        blockStrokePaint.setColor(withAlpha(0xFFFFFFFF, active ? 0.42f : 0.24f));
-        canvas.drawRoundRect(rect, radius, radius, blockStrokePaint);
+        // 4. Dark outline
+        Paint darkOutlinePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        darkOutlinePaint.setStyle(Paint.Style.STROKE);
+        darkOutlinePaint.setStrokeWidth(dp(2.8f));
+        darkOutlinePaint.setColor(0xFF111116);
+        canvas.drawRoundRect(rect, radius, radius, darkOutlinePaint);
+
+        // 5. Neon rim light inside the outline
+        Paint neonRimPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        neonRimPaint.setStyle(Paint.Style.STROKE);
+        neonRimPaint.setStrokeWidth(dp(1.2f));
+        neonRimPaint.setColor(withAlpha(glowColor, active ? 0.85f : 0.60f));
+        RectF rimRect = new RectF(rect.left + dp(1.4f), rect.top + dp(1.4f), rect.right - dp(1.4f), rect.bottom - dp(1.4f));
+        canvas.drawRoundRect(rimRect, radius - dp(1), radius - dp(1), neonRimPaint);
 
         if (showPattern) {
             blockStrokePaint.setColor(0xFFFFFFFF);
@@ -1564,7 +1638,7 @@ public class GameView extends View {
             float cy = rect.centerY();
             float sz = rect.width() * 0.22f;
             
-            int pattern = colorIndex % 6;
+            int pattern = idx % 6;
             switch (pattern) {
                 case 0: // Cross
                     canvas.drawLine(cx - sz, cy - sz, cx + sz, cy + sz, blockStrokePaint);
@@ -2337,30 +2411,84 @@ public class GameView extends View {
             float fx = boardRect.left + food.x * cellW + cellW / 2;
             float fy = boardRect.top + food.y * cellH + cellH / 2;
             float pulse = 1f + 0.15f * (float)Math.sin(time * 6f);
-            int foodColor = 0xFFFF2D55;
-            glowPaint.setColor(foodColor); // Pink/Red or White for DMG
-            canvas.drawCircle(fx, fy, (cellW / 2 - dp(2)) * pulse, glowPaint);
+            float r = (cellW / 2 - dp(2)) * pulse;
             
-            // Subtle glow
-            glowPaint.setAlpha(120);
-            canvas.drawCircle(fx, fy, (cellW / 2 + dp(4)) * pulse, glowPaint);
-            glowPaint.setAlpha(255);
+            // Outer glow bloom (#FF4DFF)
+            glowPaint.setColor(withAlpha(0xFFFF4DFF, 0.40f));
+            canvas.drawCircle(fx, fy, r + dp(4.5f), glowPaint);
+            
+            // Base gradient fill: Highlight (#FF9AE8) to Shadow (#B10068)
+            Paint foodPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            foodPaint.setStyle(Paint.Style.FILL);
+            foodPaint.setShader(new LinearGradient(fx - r, fy - r, fx + r, fy + r,
+                    0xFFFF9AE8, 0xFFB10068, Shader.TileMode.CLAMP));
+            canvas.drawCircle(fx, fy, r, foodPaint);
+            
+            // Specular sheen
+            Paint sheenPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            sheenPaint.setStyle(Paint.Style.FILL);
+            RectF sheenRect = new RectF(fx - r*0.6f, fy - r*0.6f, fx + r*0.4f, fy);
+            int[] sheenColors = new int[]{withAlpha(0xFFFFFFFF, 0.70f), withAlpha(0xFFFFFFFF, 0.05f)};
+            sheenPaint.setShader(new LinearGradient(sheenRect.left, sheenRect.top, sheenRect.left, sheenRect.bottom, sheenColors, null, Shader.TileMode.CLAMP));
+            canvas.drawRoundRect(sheenRect, r*0.35f, r*0.35f, sheenPaint);
+            
+            // Dark outline for contrast
+            Paint outlinePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            outlinePaint.setStyle(Paint.Style.STROKE);
+            outlinePaint.setStrokeWidth(dp(1.8f));
+            outlinePaint.setColor(0xFF111116);
+            canvas.drawCircle(fx, fy, r, outlinePaint);
         }
 
         // Snake (Green circles)
         List<SnakeEngine.Point> body = snakeEngine.getSnake();
+        Paint bodyPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        bodyPaint.setStyle(Paint.Style.FILL);
+        
+        Paint sheenPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        sheenPaint.setStyle(Paint.Style.FILL);
+        
+        Paint outlinePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        outlinePaint.setStyle(Paint.Style.STROKE);
+        outlinePaint.setStrokeWidth(dp(1.8f));
+        outlinePaint.setColor(0xFF111116);
+
         for (int i = 0; i < body.size(); i++) {
             SnakeEngine.Point p = body.get(i);
             float cx = boardRect.left + p.x * cellW + cellW / 2;
             float cy = boardRect.top + p.y * cellH + cellH / 2;
             float radius = cellW / 2 - dp(1);
             
-            glowPaint.setColor(0xFF4CD964); // Bright Green from screenshot
-            canvas.drawCircle(cx, cy, radius, glowPaint);
+            // Outer bloom glow (#39FF14)
+            glowPaint.setColor(withAlpha(0xFF39FF14, i == 0 ? 0.35f : 0.20f));
+            canvas.drawCircle(cx, cy, radius + dp(2f), glowPaint);
             
-            if (i == 0) { // Head detail
-                glowPaint.setColor(0xFF248A3D);
-                canvas.drawCircle(cx, cy, radius * 0.4f, glowPaint);
+            // Base gradient fill: Highlight (#C8FF72) to Shadow (#1BAF00)
+            bodyPaint.setShader(new LinearGradient(cx - radius, cy - radius, cx + radius, cy + radius,
+                    0xFFC8FF72, 0xFF1BAF00, Shader.TileMode.CLAMP));
+            canvas.drawCircle(cx, cy, radius, bodyPaint);
+            
+            // Specular sheen
+            RectF sheenRect = new RectF(cx - radius*0.6f, cy - radius*0.6f, cx + radius*0.4f, cy);
+            int[] sheenColors = new int[]{withAlpha(0xFFFFFFFF, 0.70f), withAlpha(0xFFFFFFFF, 0.05f)};
+            sheenPaint.setShader(new LinearGradient(sheenRect.left, sheenRect.top, sheenRect.left, sheenRect.bottom, sheenColors, null, Shader.TileMode.CLAMP));
+            canvas.drawRoundRect(sheenRect, radius*0.35f, radius*0.35f, sheenPaint);
+            
+            // Dark outline for contrast
+            canvas.drawCircle(cx, cy, radius, outlinePaint);
+            
+            if (i == 0) { // Head detail - draw tiny eyes
+                // Left Eye
+                glowPaint.setColor(Color.WHITE);
+                canvas.drawCircle(cx - radius*0.35f, cy - radius*0.2f, radius*0.22f, glowPaint);
+                glowPaint.setColor(Color.BLACK);
+                canvas.drawCircle(cx - radius*0.35f, cy - radius*0.2f, radius*0.1f, glowPaint);
+                
+                // Right Eye
+                glowPaint.setColor(Color.WHITE);
+                canvas.drawCircle(cx + radius*0.35f, cy - radius*0.2f, radius*0.22f, glowPaint);
+                glowPaint.setColor(Color.BLACK);
+                canvas.drawCircle(cx + radius*0.35f, cy - radius*0.2f, radius*0.1f, glowPaint);
             }
         }
 
@@ -2423,15 +2551,33 @@ public class GameView extends View {
             boolean isFull = i < snakeEngine.getLives();
             
             if (isFull) {
-                glowPaint.setColor(Color.WHITE);
+                // Pink glossy circle:
+                // Base gradient: Highlight (#FF9AE8) to Shadow (#B10068)
+                Paint lifePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+                lifePaint.setStyle(Paint.Style.FILL);
+                lifePaint.setShader(new LinearGradient(lx - lifeSize/2, ly - lifeSize/2, lx + lifeSize/2, ly + lifeSize/2,
+                        0xFFFF9AE8, 0xFFB10068, Shader.TileMode.CLAMP));
+                canvas.drawCircle(lx, ly, lifeSize / 2, lifePaint);
+                
+                // Specular highlight sheen:
+                Paint sheenPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+                sheenPaint.setStyle(Paint.Style.FILL);
+                RectF sheenRect = new RectF(lx - lifeSize*0.35f, ly - lifeSize*0.35f, lx + lifeSize*0.25f, ly);
+                int[] sheenColors = new int[]{withAlpha(0xFFFFFFFF, 0.70f), withAlpha(0xFFFFFFFF, 0.05f)};
+                sheenPaint.setShader(new LinearGradient(sheenRect.left, sheenRect.top, sheenRect.left, sheenRect.bottom, sheenColors, null, Shader.TileMode.CLAMP));
+                canvas.drawRoundRect(sheenRect, lifeSize*0.2f, lifeSize*0.2f, sheenPaint);
+
+                // Glow (#FF4DFF)
+                glowPaint.setColor(withAlpha(0xFFFF4DFF, 0.40f));
                 glowPaint.setStyle(Paint.Style.FILL);
-                canvas.drawCircle(lx, ly, lifeSize / 2, glowPaint);
+                canvas.drawCircle(lx, ly, lifeSize / 2 + dp(2), glowPaint);
             } else {
-                glowPaint.setColor(Color.WHITE);
+                // Empty life outline (#B10068 or #FF3FB4)
+                glowPaint.setColor(0xFFFF3FB4);
                 glowPaint.setStyle(Paint.Style.STROKE);
-                glowPaint.setStrokeWidth(dp(1.2f));
+                glowPaint.setStrokeWidth(dp(1.5f));
                 canvas.drawCircle(lx, ly, lifeSize / 2 - dp(0.5f), glowPaint);
-                glowPaint.setStyle(Paint.Style.FILL);
+                glowPaint.setStyle(Paint.Style.FILL); // restore
             }
         }
 
@@ -3196,19 +3342,36 @@ public class GameView extends View {
                 } else if (value == 8) { // Durable Brick
                     int hp = breakerEngine.getBrickHP(row, col);
                     RectF cellR = cellRect(col, row, cell, rowHeight);
+                    
+                    // Shadow: #1A1F2B
+                    shadowPaint.setColor(0xFF1A1F2B);
+                    shadowPaint.setAlpha(110);
+                    canvas.drawRoundRect(new RectF(cellR.left, cellR.top + dp(3.5f), cellR.right, cellR.bottom + dp(3.5f)), dp(6), dp(6), shadowPaint);
+
+                    // Base gradient: #D7DDE3 → #3B4654
                     blockPaint.setShader(new LinearGradient(cellR.left, cellR.top, cellR.right, cellR.bottom,
-                                         0xFFBDC3C7, 0xFF2C3E50, Shader.TileMode.CLAMP));
+                                         0xFFD7DDE3, 0xFF3B4654, Shader.TileMode.CLAMP));
                     canvas.drawRoundRect(cellR, dp(6), dp(6), blockPaint);
                     blockPaint.setShader(null);
                     
-                    blockStrokePaint.setColor(0x88FFFFFF);
-                    blockStrokePaint.setStrokeWidth(dp(1.0f));
-                    blockStrokePaint.setStyle(Paint.Style.STROKE);
-                    canvas.drawRoundRect(cellR, dp(6), dp(6), blockStrokePaint);
-                    blockStrokePaint.setStyle(Paint.Style.FILL);
+                    // Specular top gloss highlight
+                    Paint sheenPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+                    sheenPaint.setStyle(Paint.Style.FILL);
+                    RectF sheenRect = new RectF(cellR.left + dp(1.8f), cellR.top + dp(1.8f), cellR.right - dp(2.2f), cellR.top + cellR.height() * 0.40f);
+                    int[] sheenColors = new int[]{withAlpha(0xFFFFFFFF, 0.45f), withAlpha(0xFFFFFFFF, 0.05f)};
+                    sheenPaint.setShader(new LinearGradient(sheenRect.left, sheenRect.top, sheenRect.left, sheenRect.bottom, sheenColors, null, Shader.TileMode.CLAMP));
+                    canvas.drawRoundRect(sheenRect, dp(4), dp(4), sheenPaint);
+
+                    // Edge Glow: #8FA8FF
+                    glowPaint.setStyle(Paint.Style.STROKE);
+                    glowPaint.setStrokeWidth(dp(1.8f));
+                    glowPaint.setColor(0xFF8FA8FF);
+                    canvas.drawRoundRect(cellR, dp(6), dp(6), glowPaint);
+                    glowPaint.setStyle(Paint.Style.FILL); // restore
                     
+                    // Cracks / HP indicators (when hp <= 2)
                     if (hp <= 2) {
-                        blockStrokePaint.setColor(0xCC000000);
+                        blockStrokePaint.setColor(0xFF111116);
                         blockStrokePaint.setStrokeWidth(dp(1.5f));
                         blockStrokePaint.setStyle(Paint.Style.STROKE);
                         canvas.drawLine(cellR.left + cellR.width()*0.2f, cellR.top + cellR.height()*0.3f, 
@@ -3221,13 +3384,24 @@ public class GameView extends View {
                     }
                 } else if (value == 9) { // PLUS Block
                     RectF cellR = cellRect(col, row, cell, rowHeight);
+                    
+                    // Base gradient: #FFF07A → #35D6FF
                     blockPaint.setShader(new LinearGradient(cellR.left, cellR.top, cellR.right, cellR.bottom,
-                                         0xFFFFE77B, 0xFF4ECFFF, Shader.TileMode.CLAMP));
+                                         0xFFFFF07A, 0xFF35D6FF, Shader.TileMode.CLAMP));
                     canvas.drawRoundRect(cellR, dp(8), dp(8), blockPaint);
                     blockPaint.setShader(null);
                     
+                    // Specular Highlight Glow: #B8FFFF
+                    Paint sheenPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+                    sheenPaint.setStyle(Paint.Style.FILL);
+                    RectF sheenRect = new RectF(cellR.left + dp(2.2f), cellR.top + dp(2.2f), cellR.right - dp(2.8f), cellR.top + cellR.height() * 0.40f);
+                    int[] sheenColors = new int[]{withAlpha(0xFFB8FFFF, 0.65f), withAlpha(0xFFB8FFFF, 0.05f)};
+                    sheenPaint.setShader(new LinearGradient(sheenRect.left, sheenRect.top, sheenRect.left, sheenRect.bottom, sheenColors, null, Shader.TileMode.CLAMP));
+                    canvas.drawRoundRect(sheenRect, dp(5), dp(5), sheenPaint);
+
+                    // Outer Glow: #42E8FF
                     glowPaint.setStyle(Paint.Style.STROKE);
-                    glowPaint.setColor(0x884ECFFF);
+                    glowPaint.setColor(0xFF42E8FF);
                     glowPaint.setStrokeWidth(dp(2.0f + 1.5f * pulse));
                     canvas.drawRoundRect(cellR, dp(8), dp(8), glowPaint);
                     glowPaint.setStyle(Paint.Style.FILL);
@@ -3239,13 +3413,24 @@ public class GameView extends View {
                     overlayTextPaint.setColor(Color.WHITE);
                 } else if (value == 10) { // MINUS Block
                     RectF cellR = cellRect(col, row, cell, rowHeight);
+                    
+                    // Base gradient: #FF3A4D → #FFC247
                     blockPaint.setShader(new LinearGradient(cellR.left, cellR.top, cellR.right, cellR.bottom,
-                                         0xFFFF4E50, 0xFFF9D423, Shader.TileMode.CLAMP));
+                                         0xFFFF3A4D, 0xFFFFC247, Shader.TileMode.CLAMP));
                     canvas.drawRoundRect(cellR, dp(8), dp(8), blockPaint);
                     blockPaint.setShader(null);
                     
+                    // Specular Highlight Glow: #FFD27A
+                    Paint sheenPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+                    sheenPaint.setStyle(Paint.Style.FILL);
+                    RectF sheenRect = new RectF(cellR.left + dp(2.2f), cellR.top + dp(2.2f), cellR.right - dp(2.8f), cellR.top + cellR.height() * 0.40f);
+                    int[] sheenColors = new int[]{withAlpha(0xFFFFD27A, 0.65f), withAlpha(0xFFFFD27A, 0.05f)};
+                    sheenPaint.setShader(new LinearGradient(sheenRect.left, sheenRect.top, sheenRect.left, sheenRect.bottom, sheenColors, null, Shader.TileMode.CLAMP));
+                    canvas.drawRoundRect(sheenRect, dp(5), dp(5), sheenPaint);
+
+                    // Outer Glow: #FF6A00
                     glowPaint.setStyle(Paint.Style.STROKE);
-                    glowPaint.setColor(0x88FF4E50);
+                    glowPaint.setColor(0xFFFF6A00);
                     glowPaint.setStrokeWidth(dp(2.0f + 1.5f * pulse));
                     canvas.drawRoundRect(cellR, dp(8), dp(8), glowPaint);
                     glowPaint.setStyle(Paint.Style.FILL);
@@ -3268,22 +3453,78 @@ public class GameView extends View {
         RectF paddleRect = new RectF(paddlePxX - paddlePxW/2f, paddlePxY - paddlePxH/2f,
                                      paddlePxX + paddlePxW/2f, paddlePxY + paddlePxH/2f);
 
-        blockPaint.setShader(new LinearGradient(paddleRect.left, paddleRect.top, paddleRect.right, paddleRect.top,
-                             0xFF4ECFFF, 0xFFF47BF5, Shader.TileMode.CLAMP));
+        // 1. Soft Bloom Glow (Layers of cyan bloom: #38D9FF)
+        glowPaint.setShader(null);
+        glowPaint.setStyle(Paint.Style.FILL);
+        
+        glowPaint.setColor(withAlpha(0xFF38D9FF, 0.15f));
+        RectF bloomRect1 = new RectF(paddleRect.left - dp(8f), paddleRect.top - dp(8f), paddleRect.right + dp(8f), paddleRect.bottom + dp(8f));
+        canvas.drawRoundRect(bloomRect1, paddlePxH/2f + dp(8f), paddlePxH/2f + dp(8f), glowPaint);
+        
+        glowPaint.setColor(withAlpha(0xFF38D9FF, 0.32f));
+        RectF bloomRect2 = new RectF(paddleRect.left - dp(4f), paddleRect.top - dp(4f), paddleRect.right + dp(4f), paddleRect.bottom + dp(4f));
+        canvas.drawRoundRect(bloomRect2, paddlePxH/2f + dp(4f), paddlePxH/2f + dp(4f), glowPaint);
+
+        // 2. Bottom Shadow: #002A8F
+        shadowPaint.setColor(0xFF002A8F);
+        shadowPaint.setAlpha(135);
+        RectF shadowRect = new RectF(paddleRect.left, paddleRect.top + dp(3.8f), paddleRect.right, paddleRect.bottom + dp(3.8f));
+        canvas.drawRoundRect(shadowRect, paddlePxH/2f, paddlePxH/2f, shadowPaint);
+
+        // 3. Base Gradient Fill: #3ED8FF → #005DFF
+        blockPaint.setShader(new LinearGradient(paddleRect.left, paddleRect.top, paddleRect.right, paddleRect.bottom,
+                             0xFF3ED8FF, 0xFF005DFF, Shader.TileMode.CLAMP));
         canvas.drawRoundRect(paddleRect, paddlePxH/2f, paddlePxH/2f, blockPaint);
         blockPaint.setShader(null);
 
-        blockStrokePaint.setColor(0xBBFFFFFF);
-        blockStrokePaint.setStrokeWidth(dp(1.2f));
-        blockStrokePaint.setStyle(Paint.Style.STROKE);
-        canvas.drawRoundRect(paddleRect, paddlePxH/2f, paddlePxH/2f, blockStrokePaint);
-        blockStrokePaint.setStyle(Paint.Style.FILL);
+        // 4. Inner Rim Light: #8A5CFF
+        Paint paddleRimPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        paddleRimPaint.setStyle(Paint.Style.STROKE);
+        paddleRimPaint.setStrokeWidth(dp(1.5f));
+        paddleRimPaint.setColor(0xFF8A5CFF);
+        RectF innerRimRect = new RectF(paddleRect.left + dp(1.5f), paddleRect.top + dp(1.5f), paddleRect.right - dp(1.5f), paddleRect.bottom - dp(1.5f));
+        canvas.drawRoundRect(innerRimRect, paddlePxH/2f - dp(1.2f), paddlePxH/2f - dp(1.2f), paddleRimPaint);
+
+        // 5. Top Highlight: #C8F7FF (Drawn on the upper edge/rim for 3D capsule feel)
+        Paint topHighlightPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        topHighlightPaint.setStyle(Paint.Style.STROKE);
+        topHighlightPaint.setStrokeWidth(dp(1.2f));
+        topHighlightPaint.setColor(0xFFC8F7FF);
+        RectF highlightRect = new RectF(paddleRect.left + dp(1.5f), paddleRect.top + dp(1.5f), paddleRect.right - dp(1.5f), paddleRect.bottom - dp(1.5f));
+        canvas.save();
+        canvas.clipRect(paddleRect.left, paddleRect.top, paddleRect.right, paddleRect.centerY());
+        canvas.drawRoundRect(highlightRect, paddlePxH/2f - dp(1.2f), paddlePxH/2f - dp(1.2f), topHighlightPaint);
+        canvas.restore();
+
+        // 6. Reflection: soft glossy white streak on upper edge
+        Paint reflectionPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        reflectionPaint.setStyle(Paint.Style.FILL);
+        RectF reflectionRect = new RectF(paddleRect.left + paddlePxH * 0.45f, paddleRect.top + dp(2.2f), paddleRect.right - paddlePxH * 0.45f, paddleRect.top + paddlePxH * 0.28f);
+        int[] reflectColors = new int[]{withAlpha(0xFFFFFFFF, 0.70f), withAlpha(0xFFFFFFFF, 0.05f)};
+        reflectionPaint.setShader(new LinearGradient(reflectionRect.left, reflectionRect.top, reflectionRect.left, reflectionRect.bottom, reflectColors, null, Shader.TileMode.CLAMP));
+        canvas.drawRoundRect(reflectionRect, reflectionRect.height() / 2f, reflectionRect.height() / 2f, reflectionPaint);
+
+        // 7. Dark Outline: #04142E
+        Paint outlinePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        outlinePaint.setStyle(Paint.Style.STROKE);
+        outlinePaint.setStrokeWidth(dp(2.5f));
+        outlinePaint.setColor(0xFF04142E);
+        canvas.drawRoundRect(paddleRect, paddlePxH/2f, paddlePxH/2f, outlinePaint);
+
+        // 8. Cyan Neon Edge Lighting Stroke: #38D9FF
+        glowPaint.setStyle(Paint.Style.STROKE);
+        glowPaint.setColor(0xFF38D9FF);
+        glowPaint.setStrokeWidth(dp(1.2f));
+        RectF outerNeonRect = new RectF(paddleRect.left - dp(0.6f), paddleRect.top - dp(0.6f), paddleRect.right + dp(0.6f), paddleRect.bottom + dp(0.6f));
+        canvas.drawRoundRect(outerNeonRect, paddlePxH/2f + dp(0.6f), paddlePxH/2f + dp(0.6f), glowPaint);
+        glowPaint.setStyle(Paint.Style.FILL); // restore
 
         // Draw Balls (with trail and glow)
         float ballRadiusInGrid = 0.22f;
         float ballPxR = (ballRadiusInGrid / BreakerEngine.COLS) * boardRect.width();
 
         for (BreakerEngine.Ball ball : breakerEngine.getActiveBalls()) {
+            // Ball Trail (fading warm orange neon trail)
             List<float[]> trail = ball.trail;
             for (int t = trail.size() - 1; t >= 0; t--) {
                 float[] pos = trail.get(t);
@@ -3291,23 +3532,75 @@ public class GameView extends View {
                 float ty = boardRect.top + (pos[1] / BreakerEngine.ROWS) * boardRect.height();
                 float alphaPct = 1f - (float) (t + 1) / (trail.size() + 1);
                 
-                int trailColor = Color.HSVToColor((int) (alphaPct * 120), new float[]{ball.hueOffset % 360f, 0.8f, 0.95f});
-                blockPaint.setColor(trailColor);
-                canvas.drawCircle(tx, ty, ballPxR * (0.5f + 0.5f * alphaPct), blockPaint);
+                blockPaint.setColor(withAlpha(0xFFFF7A00, alphaPct * 0.45f));
+                canvas.drawCircle(tx, ty, ballPxR * (0.4f + 0.6f * alphaPct), blockPaint);
             }
 
             float bx = boardRect.left + (ball.x / BreakerEngine.COLS) * boardRect.width();
             float by = boardRect.top + (ball.y / BreakerEngine.ROWS) * boardRect.height();
             
-            int ballColor = Color.HSVToColor(255, new float[]{ball.hueOffset % 360f, 0.85f, 1.0f});
-            blockPaint.setColor(ballColor);
-            canvas.drawCircle(bx, by, ballPxR, blockPaint);
+            // 1. Soft Bloom Glow (Layers of warm orange bloom: #FF7A00)
+            glowPaint.setShader(null);
+            glowPaint.setStyle(Paint.Style.FILL);
+            glowPaint.setColor(withAlpha(0xFFFF7A00, 0.18f));
+            canvas.drawCircle(bx, by, ballPxR * 1.8f, glowPaint);
+            glowPaint.setColor(withAlpha(0xFFFF7A00, 0.38f));
+            canvas.drawCircle(bx, by, ballPxR * 1.35f, glowPaint);
             
-            glowPaint.setColor(withAlpha(ballColor, 100));
-            canvas.drawCircle(bx, by, ballPxR * 1.5f, glowPaint);
+            // 2. Bottom Shadow: #B63A00
+            shadowPaint.setColor(0xFFB63A00);
+            shadowPaint.setAlpha(130);
+            canvas.drawCircle(bx, by + dp(2.0f), ballPxR, shadowPaint);
             
-            blockPaint.setColor(Color.WHITE);
-            canvas.drawCircle(bx - ballPxR * 0.25f, by - ballPxR * 0.25f, ballPxR * 0.35f, blockPaint);
+            // 3. Base Gradient Fill: #FFB11A → #FF5A00
+            Paint ballPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            ballPaint.setStyle(Paint.Style.FILL);
+            ballPaint.setShader(new LinearGradient(bx - ballPxR, by - ballPxR, bx + ballPxR, by + ballPxR,
+                    0xFFFFB11A, 0xFFFF5A00, Shader.TileMode.CLAMP));
+            canvas.drawCircle(bx, by, ballPxR, ballPaint);
+            
+            // 4. Secondary Rim Light: #FF4DFF (Inside rim)
+            Paint ballRimPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            ballRimPaint.setStyle(Paint.Style.STROKE);
+            ballRimPaint.setStrokeWidth(dp(1.2f));
+            ballRimPaint.setColor(0xFFFF4DFF);
+            canvas.drawCircle(bx, by, ballPxR - dp(0.8f), ballRimPaint);
+
+            // 5. Core Highlight: #FFF4A3 (Energy core bloom via radial gradient)
+            Paint corePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            corePaint.setStyle(Paint.Style.FILL);
+            corePaint.setShader(new RadialGradient(bx - ballPxR * 0.15f, by - ballPxR * 0.15f, ballPxR * 0.45f,
+                    0xFFFFF4A3, 0x00FFF4A3, Shader.TileMode.CLAMP));
+            canvas.drawCircle(bx - ballPxR * 0.15f, by - ballPxR * 0.15f, ballPxR * 0.45f, corePaint);
+            
+            // 6. Large Glossy White Highlight
+            Paint specPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            specPaint.setStyle(Paint.Style.FILL);
+            RectF specRect = new RectF(bx - ballPxR * 0.55f, by - ballPxR * 0.55f, bx + ballPxR * 0.15f, by - ballPxR * 0.15f);
+            int[] specColors = new int[]{withAlpha(0xFFFFFFFF, 0.75f), withAlpha(0xFFFFFFFF, 0.05f)};
+            specPaint.setShader(new LinearGradient(specRect.left, specRect.top, specRect.left, specRect.bottom, specColors, null, Shader.TileMode.CLAMP));
+            canvas.drawRoundRect(specRect, ballPxR * 0.35f, ballPxR * 0.35f, specPaint);
+
+            // 7. Small sharp specular reflections (two distinct small white specs)
+            Paint specDotPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            specDotPaint.setStyle(Paint.Style.FILL);
+            specDotPaint.setColor(Color.WHITE);
+            canvas.drawCircle(bx - ballPxR * 0.40f, by - ballPxR * 0.40f, ballPxR * 0.10f, specDotPaint);
+            canvas.drawCircle(bx + ballPxR * 0.38f, by + ballPxR * 0.32f, ballPxR * 0.07f, specDotPaint);
+
+            // 8. Dark Outline: #24001A
+            Paint ballOutlinePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            ballOutlinePaint.setStyle(Paint.Style.STROKE);
+            ballOutlinePaint.setStrokeWidth(dp(2.0f));
+            ballOutlinePaint.setColor(0xFF24001A);
+            canvas.drawCircle(bx, by, ballPxR, ballOutlinePaint);
+
+            // 9. Outer Neon Glow Stroke: #FF7A00
+            Paint neonGlowStroke = new Paint(Paint.ANTI_ALIAS_FLAG);
+            neonGlowStroke.setStyle(Paint.Style.STROKE);
+            neonGlowStroke.setColor(0xFFFF7A00);
+            neonGlowStroke.setStrokeWidth(dp(1.2f));
+            canvas.drawCircle(bx, by, ballPxR + dp(0.6f), neonGlowStroke);
         }
 
         // Draw Explosions
