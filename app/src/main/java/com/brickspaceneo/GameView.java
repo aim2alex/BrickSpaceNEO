@@ -160,8 +160,16 @@ public class GameView extends View {
     private float touchDownY;
     private float touchAnchorX;
     private boolean isSwipingHorizontally;
+    private boolean isButtonPressed = false;
+    private float pressedTouchX = -1f;
+    private float pressedTouchY = -1f;
     private float mmStartY;
     private android.graphics.drawable.Drawable logoDrawable;
+    private android.graphics.drawable.Drawable bricksIcon;
+    private android.graphics.drawable.Drawable snakeIcon;
+    private android.graphics.drawable.Drawable columnsIcon;
+    private android.graphics.drawable.Drawable collapseIcon;
+    private android.graphics.drawable.Drawable breakerIcon;
 
     private MediaPlayer bgMusic;
     private MediaPlayer bgMusicNext;
@@ -218,8 +226,11 @@ public class GameView extends View {
         helperPaint.setColor(0xD6E8F7FF);
         helperPaint.setTextAlign(Paint.Align.CENTER);
 
-        for (int i = 0; i < 18; i++) {
-            orbs.add(new BackgroundOrb(random.nextFloat(), random.nextFloat(), random.nextFloat()));
+        for (int i = 0; i < 25; i++) {
+            orbs.add(new BackgroundOrb(random.nextFloat(), random.nextFloat(), random.nextFloat(), 0, false));
+        }
+        for (int i = 0; i < 8; i++) {
+            orbs.add(new BackgroundOrb(random.nextFloat(), random.nextFloat(), random.nextFloat(), 1, false));
         }
 
         // Initialize 10 falling comets and 30 falling particles
@@ -251,6 +262,11 @@ public class GameView extends View {
         }
         
         logoDrawable = context.getDrawable(R.drawable.brickspaceneo_logo);
+        bricksIcon = context.getDrawable(R.drawable.bricks);
+        snakeIcon = context.getDrawable(R.drawable.snake);
+        columnsIcon = context.getDrawable(R.drawable.columns);
+        collapseIcon = context.getDrawable(R.drawable.collapse);
+        breakerIcon = context.getDrawable(R.drawable.breaker);
         initAudio(context);
         updateSystemBars();
     }
@@ -601,12 +617,32 @@ public class GameView extends View {
 
         boardShake = Math.max(0f, boardShake - delta * 2.0f);
         orbLinePull = Math.max(0f, orbLinePull - delta * 1.8f);
-        for (int i = 0; i < orbs.size(); i++) {
+        float speedMult = 1.0f + orbLinePull * 5.0f; // accelerate when line is destroyed
+        for (int i = orbs.size() - 1; i >= 0; i--) {
             BackgroundOrb orb = orbs.get(i);
-            orb.pullVelocity += delta * dp(140) * orbLinePull;
-            orb.pullOffset += orb.pullVelocity * delta;
-            orb.pullVelocity *= (1f - Math.min(0.5f, delta * 2.6f));
-            orb.pullOffset *= (1f - Math.min(0.35f, delta * 1.9f));
+            
+            // Slowly fall down. stars fall very slowly, comets a bit faster.
+            float baseVSpeed = (orb.type == 0) ? 0.015f : 0.04f;
+            orb.y += (baseVSpeed + 0.02f * orb.speed) * delta * speedMult;
+            
+            // Comets also fall diagonally (leftwards)
+            if (orb.type == 1) {
+                orb.x -= (0.02f + 0.02f * orb.speed) * delta * speedMult;
+            }
+            
+            // Check bounds
+            if (orb.y > 1.0f || (orb.type == 1 && orb.x < -0.05f)) {
+                if (orb.isTemporaryComet) {
+                    orbs.remove(i);
+                } else {
+                    orb.y = 0.0f;
+                    orb.x = random.nextFloat();
+                    if (orb.type == 1) {
+                        // Comets start on top or top-right to fall diagonally
+                        orb.x = 0.3f + random.nextFloat() * 0.7f;
+                    }
+                }
+            }
         }
         particleBounds.set(dp(8), dp(8), getWidth() - dp(8), getHeight() - dp(8));
         for (int i = particles.size() - 1; i >= 0; i--) {
@@ -889,17 +925,51 @@ public class GameView extends View {
         canvas.drawCircle(getWidth() * 0.85f, getHeight() * 0.16f, getWidth() * 0.26f, glowPaint);
         glowPaint.setShader(null);
 
+        Paint tailPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        tailPaint.setStyle(Paint.Style.STROKE);
+        
         for (BackgroundOrb orb : orbs) {
-            float x = orb.x * getWidth();
-            float y = orb.y * getHeight();
-            x += (float) Math.sin(time * (0.95f + orb.speed * 0.55f) + orb.phase) * dp(8);
-            y += (float) Math.cos(time * (0.8f + orb.speed) + orb.phase) * dp(12);
-            y += orb.pullOffset + dp(36) * orbLinePull;
-            float radius = dp(3 + 7 * orb.speed) * (1f + orbLinePull * 0.12f);
-            int color = Color.argb((int) (40 + orb.speed * 55 + orbLinePull * 18), 190, 244, 255);
-            glowPaint.setColor(color);
-            canvas.drawCircle(x, y, radius, glowPaint);
+            float px = orb.x * getWidth();
+            float py = orb.y * getHeight();
+            
+            if (orb.type == 0) { // Star
+                // Twinkle/shine phase animation
+                float twinkle = (float) Math.sin(time * 3f + orb.phase) * 0.5f + 0.5f;
+                // Subtle alpha (10 to 45 base) + clear multiplier
+                int alpha = (int) ((12 + 28 * orb.speed) * (0.3f + 0.7f * twinkle) + orbLinePull * 15);
+                alpha = Math.max(0, Math.min(255, alpha));
+                
+                float radius = dp(1f + 2f * orb.speed);
+                
+                // Outer glow
+                glowPaint.setColor(Color.argb(alpha / 2, 190, 244, 255));
+                canvas.drawCircle(px, py, radius * 2.2f, glowPaint);
+                
+                // Star center
+                glowPaint.setColor(Color.argb(alpha, 255, 255, 255));
+                canvas.drawCircle(px, py, radius, glowPaint);
+                
+            } else { // Comet
+                float radius = dp(1.8f + 2f * orb.speed);
+                int alpha = (int) ((15 + 30 * orb.speed) + orbLinePull * 20);
+                alpha = Math.max(0, Math.min(255, alpha));
+                
+                // Draw diagonal trail pointing top-right
+                float tailLength = dp(12f + 20f * orb.speed * (1f + orbLinePull * 1.5f));
+                float dx = tailLength * 0.707f;
+                float dy = tailLength * 0.707f;
+                
+                tailPaint.setStrokeWidth(radius * 1.1f);
+                int[] colors = new int[]{Color.argb(alpha, 190, 244, 255), Color.argb(0, 190, 244, 255)};
+                tailPaint.setShader(new LinearGradient(px, py, px + dx, py - dy, colors, null, Shader.TileMode.CLAMP));
+                canvas.drawLine(px, py, px + dx, py - dy, tailPaint);
+                
+                // Comet head
+                glowPaint.setColor(Color.argb(alpha, 255, 255, 255));
+                canvas.drawCircle(px, py, radius, glowPaint);
+            }
         }
+        glowPaint.setShader(null);
 
         drawBlob(canvas, getWidth() * 0.08f, getHeight() * 0.76f, dp(110), 0x1A00F0FF, time * 0.7f); // Neon cyan blob
         drawBlob(canvas, getWidth() * 0.88f, getHeight() * 0.72f, dp(92), 0x1D9D7BFF, time * 0.9f + 1.4f); // Neon purple blob
@@ -1383,37 +1453,40 @@ public class GameView extends View {
 
     private void drawButton(Canvas canvas, RectF rect, String label, int fillColor, int glowColor) {
         Paint btnPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        btnPaint.setStyle(Paint.Style.FILL);
+        
+        // Frosted glass background: gradient from white with 18% opacity to a light themed blue with 10% opacity, angled at -45 degrees
+        int fillStart = withAlpha(0xFFFFFFFF, 0.18f);
+        int fillEnd = withAlpha(0xFF6188FF, 0.10f);
+        btnPaint.setShader(createAngledGradient(rect, new int[]{fillStart, fillEnd}, null, -45f));
+        canvas.drawRoundRect(rect, dp(22), dp(22), btnPaint);
+
+        // Glass highlight rim
+        Paint highlightPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        highlightPaint.setStyle(Paint.Style.STROKE);
+        highlightPaint.setStrokeWidth(dp(1f));
+        highlightPaint.setColor(withAlpha(0xFFFFFFFF, 0.15f));
+        RectF innerRect = new RectF(rect.left + dp(2), rect.top + dp(2), rect.right - dp(2), rect.bottom - dp(2));
+        canvas.drawRoundRect(innerRect, dp(20), dp(20), highlightPaint);
+
+        // Border/Stroke
         Paint strokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         strokePaint.setStyle(Paint.Style.STROKE);
         strokePaint.setStrokeWidth(dp(2f));
-        boolean isGameplayControl = (rect == leftButton || rect == rotateButton || rect == rightButton || rect == dropButton);
-        float opacity = isGameplayControl ? 0.12f : 0.30f;
-
-        if (label.equalsIgnoreCase("Start Game") || rect == pauseButton || rect == rotateButton) {
-            // Fill: gradient from #502a80 to #3d339d, 30% opacity, angle -30 degrees
-            int startColor = withAlpha(0xFF502A80, opacity);
-            int endColor = withAlpha(0xFF3D339D, opacity);
-            btnPaint.setShader(createAngledGradient(rect, new int[]{startColor, endColor}, null, -30f));
-            canvas.drawRoundRect(rect, dp(22), dp(22), btnPaint);
-
+        
+        boolean isBtnPressed = isButtonPressed && rect.contains(pressedTouchX, pressedTouchY);
+        if (isBtnPressed) {
             // Stroke: gradient #009afc, #1a33e0, #7912d3, #f21ee0, angle 120 degrees, non-transparent
             int[] strokeColors = new int[]{0xFF009AFC, 0xFF1A33E0, 0xFF7912D3, 0xFFF21EE0};
             strokePaint.setShader(createAngledGradient(rect, strokeColors, null, 120f));
-            
-            RectF strokeRect = new RectF(rect.left + dp(1), rect.top + dp(1), rect.right - dp(1), rect.bottom - dp(1));
-            canvas.drawRoundRect(strokeRect, dp(21), dp(21), strokePaint);
         } else {
-            // All other UI buttons: gradient from #2a3780 and #33439d, 30% opacity, angle -90 degrees
-            int startColor = withAlpha(0xFF2A3780, opacity);
-            int endColor = withAlpha(0xFF33439D, opacity);
-            btnPaint.setShader(createAngledGradient(rect, new int[]{startColor, endColor}, null, -90f));
-            canvas.drawRoundRect(rect, dp(22), dp(22), btnPaint);
-
             // Border: solid #6188ff, non-transparent
+            strokePaint.setShader(null);
             strokePaint.setColor(0xFF6188FF);
-            RectF strokeRect = new RectF(rect.left + dp(1), rect.top + dp(1), rect.right - dp(1), rect.bottom - dp(1));
-            canvas.drawRoundRect(strokeRect, dp(21), dp(21), strokePaint);
         }
+        
+        RectF strokeRect = new RectF(rect.left + dp(1), rect.top + dp(1), rect.right - dp(1), rect.bottom - dp(1));
+        canvas.drawRoundRect(strokeRect, dp(21), dp(21), strokePaint);
 
         float baseline = rect.centerY() - (buttonPaint.descent() + buttonPaint.ascent()) * 0.5f;
         canvas.drawText(label, rect.centerX(), baseline, buttonPaint);
@@ -1590,10 +1663,13 @@ public class GameView extends View {
     private void triggerLinePull(int clearedLines) {
         float intensity = Math.min(1.5f, 0.55f + clearedLines * 0.22f);
         orbLinePull = Math.max(orbLinePull, intensity);
-        for (int i = 0; i < orbs.size(); i++) {
-            BackgroundOrb orb = orbs.get(i);
-            orb.pullVelocity += dp(80 + random.nextFloat() * 110f) * intensity;
-            orb.pullOffset += dp(6 + random.nextFloat() * 12f) * intensity;
+        // Spawn temporary comets on line clear!
+        int extraComets = 3 + random.nextInt(4); // 3 to 6 comets
+        for (int i = 0; i < extraComets; i++) {
+            float startX = 0.3f + random.nextFloat() * 0.7f;
+            float startY = -0.05f;
+            float speed = 0.8f + random.nextFloat() * 0.8f;
+            orbs.add(new BackgroundOrb(startX, startY, speed, 1, true));
         }
     }
 
@@ -1620,8 +1696,14 @@ public class GameView extends View {
     public boolean onTouchEvent(MotionEvent event) {
         float x = event.getX();
         float y = event.getY();
+        int action = event.getAction();
 
-        if (event.getAction() == MotionEvent.ACTION_DOWN) {
+        if (action == MotionEvent.ACTION_DOWN) {
+            isButtonPressed = true;
+            pressedTouchX = x;
+            pressedTouchY = y;
+            postInvalidate();
+
             touchDownX = x;
             touchDownY = y;
             touchAnchorX = x;
@@ -1648,7 +1730,11 @@ public class GameView extends View {
             } else if (currentGameMode == GameMode.BREAKER) {
                 handleBreakerTouch(x, y, MotionEvent.ACTION_DOWN);
             }
-        } else if (event.getAction() == MotionEvent.ACTION_MOVE) {
+        } else if (action == MotionEvent.ACTION_MOVE) {
+            pressedTouchX = x;
+            pressedTouchY = y;
+            postInvalidate();
+
             if (currentGameMode == GameMode.BREAKER && !inMainMenu && !inGameSelection) {
                 handleBreakerTouch(x, y, MotionEvent.ACTION_MOVE);
             } else if (useGestures && !inMainMenu && !inGameSelection) {
@@ -1656,7 +1742,12 @@ public class GameView extends View {
                 else if (currentGameMode == GameMode.COLUMNS) handleColumnsGestureMove(x, y);
                 else if (currentGameMode == GameMode.COLLAPSE) handleCollapseGestureMove(x, y);
             }
-        } else if (event.getAction() == MotionEvent.ACTION_UP || event.getAction() == MotionEvent.ACTION_CANCEL) {
+        } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+            isButtonPressed = false;
+            pressedTouchX = -1f;
+            pressedTouchY = -1f;
+            postInvalidate();
+
             if (currentGameMode == GameMode.BREAKER && !inMainMenu && !inGameSelection) {
                 handleBreakerTouch(x, y, event.getAction());
             } else if (useGestures && !inMainMenu && !inGameSelection) {
@@ -2114,63 +2205,64 @@ public class GameView extends View {
     private void drawGameTile(Canvas canvas, RectF rect, String title, int type, boolean selected) {
         Paint fillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         fillPaint.setStyle(Paint.Style.FILL);
-        int startColor = withAlpha(0xFF2A3780, 0.30f);
-        int endColor = withAlpha(0xFF33439D, 0.30f);
-        fillPaint.setShader(createAngledGradient(rect, new int[]{startColor, endColor}, null, -90f));
+        
+        // Frosted glass background: gradient from white with 18% opacity to a light themed blue with 10% opacity, angled at -45 degrees
+        int fillStart = withAlpha(0xFFFFFFFF, 0.18f);
+        int fillEnd = withAlpha(0xFF6188FF, 0.10f);
+        fillPaint.setShader(createAngledGradient(rect, new int[]{fillStart, fillEnd}, null, -45f));
         canvas.drawRoundRect(rect, dp(22), dp(22), fillPaint);
+
+        // Glass highlight rim
+        Paint highlightPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        highlightPaint.setStyle(Paint.Style.STROKE);
+        highlightPaint.setStrokeWidth(dp(1f));
+        highlightPaint.setColor(withAlpha(0xFFFFFFFF, 0.15f));
+        RectF innerRect = new RectF(rect.left + dp(2), rect.top + dp(2), rect.right - dp(2), rect.bottom - dp(2));
+        canvas.drawRoundRect(innerRect, dp(20), dp(20), highlightPaint);
 
         Paint strokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         strokePaint.setStyle(Paint.Style.STROKE);
         strokePaint.setStrokeWidth(dp(2f));
-        strokePaint.setColor(selected ? 0xFF4ECFFF : 0xFF6188FF);
+        
+        boolean isTilePressed = isButtonPressed && rect.contains(pressedTouchX, pressedTouchY);
+        if (isTilePressed) {
+            // Stroke: gradient #009afc, #1a33e0, #7912d3, #f21ee0, angle 120 degrees, non-transparent
+            int[] strokeColors = new int[]{0xFF009AFC, 0xFF1A33E0, 0xFF7912D3, 0xFFF21EE0};
+            strokePaint.setShader(createAngledGradient(rect, strokeColors, null, 120f));
+        } else {
+            strokePaint.setShader(null);
+            strokePaint.setColor(selected ? 0xFF4ECFFF : 0xFF6188FF);
+        }
+        
         RectF strokeRect = new RectF(rect.left + dp(1), rect.top + dp(1), rect.right - dp(1), rect.bottom - dp(1));
         canvas.drawRoundRect(strokeRect, dp(21), dp(21), strokePaint);
 
-        float iconSize = dp(40);
-        float iconX = rect.centerX();
-        float iconY = rect.top + dp(60);
-        
-        if (type == 0) { // Bricks Icon
-            drawJellyCellAt(canvas, new RectF(iconX - iconSize/2, iconY - iconSize/2, iconX + iconSize/2, iconY + iconSize/2), 0, 0, 0, true, false, false);
-        } else if (type == 1) { // Snake Icon
-            glowPaint.setColor(PIECE_COLORS[3]); // Green
-            canvas.drawCircle(iconX, iconY, iconSize/2, glowPaint);
-            glowPaint.setColor(Color.WHITE);
-            canvas.drawCircle(iconX - dp(8), iconY - dp(5), dp(4), glowPaint);
-            canvas.drawCircle(iconX + dp(8), iconY - dp(5), dp(4), glowPaint);
-        } else if (type == 2) { // Columns Icon
-            float bw = iconSize * 1.5f;
-            float bh = iconSize * 0.45f;
-            RectF cr = new RectF(iconX - bw/2, iconY - bh/2, iconX + bw/2, iconY + bh/2);
-            drawGlassCard(canvas, cr, 0xCC143456, 0x6636D6FF);
-            float cs = bw / 4.5f;
-            for (int i = 0; i < 4; i++) {
-                float cx = cr.left + dp(6) + i * (cs + dp(4));
-                glowPaint.setColor(PIECE_COLORS[i % PIECE_COLORS.length]);
-                canvas.drawCircle(cx + cs/2, iconY, cs/2.2f, glowPaint);
-            }
-        } else if (type == 3) { // Collapse Icon
-            float bs = iconSize * 0.35f;
-            drawJellyCellAt(canvas, new RectF(iconX - bs * 1.2f, iconY + bs * 0.4f, iconX - bs * 0.2f, iconY + bs * 1.4f), 1, 0, 0, true, false, false);
-            drawJellyCellAt(canvas, new RectF(iconX - bs * 0.5f, iconY - bs * 0.5f, iconX + bs * 0.5f, iconY + bs * 0.5f), 2, 0, 0, true, false, false);
-            drawJellyCellAt(canvas, new RectF(iconX + bs * 0.2f, iconY - bs * 1.4f, iconX + bs * 1.2f, iconY - bs * 0.4f), 3, 0, 0, true, false, false);
-        } else { // Breaker Icon
-            // Draw a tiny paddle at the bottom
-            float pw = iconSize * 1.1f;
-            float ph = iconSize * 0.22f;
-            RectF padR = new RectF(iconX - pw/2, iconY + iconSize/4 - ph/2, iconX + pw/2, iconY + iconSize/4 + ph/2);
-            blockPaint.setColor(0xFF4ECFFF);
-            canvas.drawRoundRect(padR, dp(3), dp(3), blockPaint);
+        android.graphics.drawable.Drawable icon = null;
+        if (type == 0) icon = bricksIcon;
+        else if (type == 1) icon = snakeIcon;
+        else if (type == 2) icon = columnsIcon;
+        else if (type == 3) icon = collapseIcon;
+        else if (type == 4) icon = breakerIcon;
+
+        if (icon != null) {
+            icon.setColorFilter(null);
+            float size = dp(54f);
+            float iconX = rect.centerX();
+            float iconY = rect.top + dp(45f);
             
-            // Draw a tiny ball bouncing upwards
-            float bx = iconX;
-            float by = iconY - iconSize/4;
-            glowPaint.setColor(0xFFFFD35A);
-            canvas.drawCircle(bx, by, dp(5), glowPaint);
+            float left = iconX - size / 2f;
+            float top = iconY - size / 2f;
+            float right = iconX + size / 2f;
+            float bottom = iconY + size / 2f;
+            
+            icon.setBounds((int) left, (int) top, (int) right, (int) bottom);
+            icon.draw(canvas);
         }
 
-        buttonPaint.setTextSize(dp(22));
-        canvas.drawText(title, rect.centerX(), rect.bottom - dp(30), buttonPaint);
+        float prevTextSize = buttonPaint.getTextSize();
+        buttonPaint.setTextSize(dp(13f));
+        canvas.drawText(title, rect.centerX(), rect.bottom - dp(18), buttonPaint);
+        buttonPaint.setTextSize(prevTextSize);
     }
 
     private void drawSnakeHud(Canvas canvas) {
@@ -2686,18 +2778,20 @@ public class GameView extends View {
     }
 
     private static final class BackgroundOrb {
-        final float x;
-        final float y;
-        final float speed;
-        final float phase;
-        float pullOffset;
-        float pullVelocity;
+        float x;
+        float y;
+        float speed;
+        float phase;
+        int type; // 0 = Star, 1 = Comet
+        boolean isTemporaryComet;
 
-        BackgroundOrb(float x, float y, float speed) {
+        BackgroundOrb(float x, float y, float speed, int type, boolean isTemporaryComet) {
             this.x = x;
             this.y = y;
             this.speed = 0.4f + speed;
             this.phase = speed * 7f;
+            this.type = type;
+            this.isTemporaryComet = isTemporaryComet;
         }
     }
 
@@ -3087,29 +3181,7 @@ public class GameView extends View {
             }
         }
 
-        // Draw pulsing Danger Zone background overlay
         float pulse = (float) Math.sin(time * 6.0f) * 0.5f + 0.5f;
-        int dangerColor = withAlpha(0xFFFF3B30, (int) (20 + 25 * pulse));
-        overlayPaint.setColor(dangerColor);
-        overlayPaint.setStyle(Paint.Style.FILL);
-        RectF dangerZoneRect = new RectF(boardRect.left, boardRect.top + BreakerEngine.DANGER_ZONE_START_ROW * rowHeight, boardRect.right, boardRect.bottom);
-        canvas.drawRoundRect(dangerZoneRect, dp(12), dp(12), overlayPaint);
-
-        // Danger Zone line
-        overlayPaint.setColor(0xFFFF3B30);
-        overlayPaint.setStyle(Paint.Style.STROKE);
-        overlayPaint.setStrokeWidth(dp(2.0f));
-        canvas.drawLine(boardRect.left, boardRect.top + BreakerEngine.DANGER_ZONE_START_ROW * rowHeight, boardRect.right, boardRect.top + BreakerEngine.DANGER_ZONE_START_ROW * rowHeight, overlayPaint);
-        overlayPaint.setStyle(Paint.Style.FILL); // restore
-
-        // Danger Zone text
-        helperPaint.setColor(0xFFFF3B30);
-        helperPaint.setAlpha((int) (40 + 30 * pulse));
-        helperPaint.setTextSize(dp(10));
-        helperPaint.setTextAlign(Paint.Align.CENTER);
-        canvas.drawText("⚠️ DANGER ZONE ⚠️", boardRect.centerX(), boardRect.top + 18.7f * rowHeight, helperPaint);
-        helperPaint.setColor(Color.WHITE);
-        helperPaint.setAlpha(255);
 
         // Draw blocks/bricks
         for (int row = 0; row < BreakerEngine.ROWS; row++) {
